@@ -14,12 +14,23 @@ const options = {cors:{
 }}
 const io = require('socket.io')(server, options);
 
+let groups = [];
+
 io.on('connection', (socket) => {
     socket.on('newmsg', (message) => {
         io.emit('newmsg', message);
     })
     socket.on('disconnect', () => {
-        io.emit('disconnect');
+    });
+
+    socket.on('groups:create', (group) => {
+        groups.push(group); // store in memory or DB
+        io.emit('groups:update', groups); // broadcast to all clients
+    });
+
+    socket.on('groups:delete', (groupId) => {
+        groups = groups.filter(g => g.id !== groupId);
+        io.emit('groups:update', groups);
     });
 });
 
