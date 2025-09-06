@@ -1,3 +1,4 @@
+<button (click)="goBack()">⬅ Back to My Groups</button>
 <h2>Super Admin Dashboard</h2>
 
 <form (ngSubmit)="addGroup()">
@@ -52,6 +53,17 @@
       <ul>
         @for(b of g.bannedMembers; track $index) {
           <li>{{ b }}</li>
+        }
+      </ul>
+
+      <p><b>Join Requests:</b></p>
+      <ul>
+        @for(r of g.joinRequests; track $index) {
+          <li>
+            {{ r }}
+            <button (click)="approveJoin(g.id, r)">Approve</button>
+            <button (click)="declineJoin(g.id, r)">Decline</button>
+          </li>
         }
       </ul>
 

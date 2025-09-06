@@ -4,6 +4,7 @@ import { GroupService } from '../../services/group-service/group-service';
 import { UserService } from '../../services/user-service/user-service';
 import { Report } from '../../models/report';
 import { DatePipe } from '@angular/common';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-super-dashboard',
@@ -14,6 +15,7 @@ import { DatePipe } from '@angular/common';
 export class SuperDashboard {
   private groupService = inject(GroupService);
   private userService = inject(UserService);
+  private router = inject(Router);
 
   groupName = signal('');
   reports = signal<Report[]>([]);
@@ -90,11 +92,21 @@ export class SuperDashboard {
   }
 
   approveJoin(groupId: string, username: string) {
-    this.groupService.approveJoin(groupId, username);
+    const currentUser = this.userService.getCurrentUser();
+    if (currentUser) {
+      this.groupService.approveJoin(groupId, username, currentUser.username);
+    }
   }
 
   declineJoin(groupId: string, username: string) {
-    this.groupService.declineJoin(groupId, username);
+    const currentUser = this.userService.getCurrentUser();
+    if (currentUser) {
+      this.groupService.declineJoin(groupId, username, currentUser.username);
+    }
+  }
+
+  goBack() {
+    this.router.navigate(['/current-groups']);
   }
 
 }

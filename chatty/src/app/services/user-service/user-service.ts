@@ -84,6 +84,7 @@ const USERS: User[] = [
   providedIn: 'root'
 })
 export class UserService {
+  private sockets = inject(Sockets)
   private groupService = inject(GroupService);
   private currentUser: User | null = null;
 
@@ -109,6 +110,7 @@ export class UserService {
     if (user) {
       this.currentUser = user;
       sessionStorage.setItem('currentUser', JSON.stringify(user));
+      this.sockets.emit('users:sync', this.getCurrentUser());
       return true;
     }
     return false;
@@ -154,8 +156,27 @@ export class UserService {
     USERS.push(newUser);
     this.currentUser = newUser;
     sessionStorage.setItem('currentUser', JSON.stringify(newUser));
+    this.sockets.emit('users:sync', this.getCurrentUser());
     return true;
   }
 
+  deleteCurrentUser() {
+    const user = this.getCurrentUser();
+    if (!user) return;
+
+    // Remove from USERS array
+    const index = USERS.findIndex(u => u.username === user.username);
+    if (index !== -1) {
+      USERS.splice(index, 1);
+    }
+
+    // Tell backend to clean up group memberships
+    this.sockets.emit('users:delete', user.username);
+
+    // Clear state + storage
+    this.logout();
+  }
+
+  
 
 }

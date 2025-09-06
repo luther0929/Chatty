@@ -1,3 +1,4 @@
+<button (click)="goBack()">⬅ Back to My Groups</button>
 <h2>Group Admin Dashboard</h2>
 
 <form (ngSubmit)="addGroup()">
@@ -45,13 +46,17 @@
 
       <p><b>Join Requests:</b></p>
       <ul>
-        @for(r of g.joinRequests; track $index) {
-          <li>
-            {{ r }}
+
+      @for(r of g.joinRequests; track $index) {
+        <li>
+          {{ r }}
+          @if((currentUser?.roles ?? []).includes('superAdmin') || g.admins.includes(currentUser?.username || '')) {
             <button (click)="approveJoin(g.id, r)">Approve</button>
             <button (click)="declineJoin(g.id, r)">Decline</button>
-          </li>
-        }
+          }
+        </li>
+      }
+
       </ul>
 
       @if(

@@ -13,7 +13,7 @@ const options = {cors:{
     methods: ["GET", "POST"],
 }}
 const io = require('socket.io')(server, options);
-
+let users = [];
 let groups = [];
 
 io.on('connection', (socket) => {
@@ -303,24 +303,59 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('groups:approveJoin', ({ groupId, username }) => {
+    socket.on('groups:approveJoin', ({ groupId, username, actingUser }) => {
         const group = groups.find(g => g.id === groupId);
-        if (group) {
-            group.joinRequests = group.joinRequests.filter(u => u !== username);
-            if (!group.members.includes(username)) {
-                group.members.push(username);
-            }
+        const isSuper = users.find(u => u.username === actingUser)?.roles.includes('superAdmin');
+        const isAdmin = group?.admins.includes(actingUser);
+
+        if (group && (isSuper || isAdmin)) {
+            // ✅ authorized
+            group.members.push(username);
+            group.joinRequests = group.joinRequests.filter(r => r !== username);
             io.emit('groups:update', groups);
         }
     });
 
-    socket.on('groups:declineJoin', ({ groupId, username }) => {
+    socket.on('groups:declineJoin', ({ groupId, username, actingUser }) => {
         const group = groups.find(g => g.id === groupId);
-        if (group) {
-            group.joinRequests = group.joinRequests.filter(u => u !== username);
+        const isSuper = users.find(u => u.username === actingUser)?.roles.includes('superAdmin');
+        const isAdmin = group?.admins.includes(actingUser);
+
+        if (group && (isSuper || isAdmin)) {
+            // ✅ authorized
+            group.joinRequests = group.joinRequests.filter(r => r !== username);
             io.emit('groups:update', groups);
         }
-    });  
+    });
+
+    socket.on('users:delete', (username) => {
+        // 1. Remove user from global users array
+        users = users.filter(u => u.username !== username);
+
+        // 2. Cascade cleanup across groups
+        groups.forEach(group => {
+            // Remove from members
+            group.members = (group.members || []).filter(m => m !== username);
+
+            // Remove from admins
+            group.admins = (group.admins || []).filter(a => a !== username);
+
+            // Remove from banned members
+            group.bannedMembers = (group.bannedMembers || []).filter(b => b !== username);
+
+            // Remove from join requests
+            group.joinRequests = (group.joinRequests || []).filter(r => r !== username);
+
+            // Remove from all channels
+            (group.channels || []).forEach(channel => {
+                channel.users = (channel.users || []).filter(u => u !== username);
+            });
+        });
+
+        // 3. Broadcast updates
+        io.emit('groups:update', groups);
+        io.emit('users:update', users);
+    });
 
 });
 

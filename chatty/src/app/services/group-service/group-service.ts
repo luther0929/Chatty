@@ -110,12 +110,21 @@ export class GroupService {
     });
   }
 
-  approveJoin(groupId: string, username: string) {
-    this.sockets.emit('groups:approveJoin', { groupId, username });
+  approveJoin(groupId: string, username: string, actingUser: string) {
+    this.sockets.emit('groups:approveJoin', {
+      groupId,
+      username,
+      actingUser
+    });
   }
 
-  declineJoin(groupId: string, username: string) {
-    this.sockets.emit('groups:declineJoin', { groupId, username });
+
+  declineJoin(groupId: string, username: string, actingUser: string) {
+    this.sockets.emit('groups:declineJoin', {
+      groupId,
+      username,
+      actingUser
+    });
   }
 
 }

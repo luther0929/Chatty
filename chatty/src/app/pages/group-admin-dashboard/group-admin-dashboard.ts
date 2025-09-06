@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GroupService } from '../../services/group-service/group-service';
 import { UserService } from '../../services/user-service/user-service';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-group-admin-dashboard',
@@ -9,12 +10,14 @@ import { UserService } from '../../services/user-service/user-service';
   templateUrl: './group-admin-dashboard.html',
   styleUrl: './group-admin-dashboard.css'
 })
+
 export class GroupAdminDashboard {
   private groupService = inject(GroupService);
   private userService = inject(UserService);
+  private router = inject(Router);
 
   groupName = signal('');
-
+  
   get groups() {
     return this.groupService.groups();
   }
@@ -80,11 +83,21 @@ export class GroupAdminDashboard {
   }
 
   approveJoin(groupId: string, username: string) {
-    this.groupService.approveJoin(groupId, username);
+    const currentUser = this.userService.getCurrentUser();
+    if (currentUser) {
+      this.groupService.approveJoin(groupId, username, currentUser.username);
+    }
   }
 
   declineJoin(groupId: string, username: string) {
-    this.groupService.declineJoin(groupId, username);
+    const currentUser = this.userService.getCurrentUser();
+    if (currentUser) {
+      this.groupService.declineJoin(groupId, username, currentUser.username);
+    }
+  }
+
+  goBack() {
+    this.router.navigate(['/current-groups']);
   }
 
 }
