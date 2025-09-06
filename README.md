@@ -1,211 +1,259 @@
-# Project Documentation
+# Real-Time Group Chat Application Documentation
+
+This document provides a comprehensive overview of a real-time group chat application built with Angular (client-side), Node.js (server-side), and Socket.IO for real-time communication. It details the data structures, client and server architectures, Socket.IO API, workflows, authentication, authorization, and planned REST API mappings.
+
+## Table of Contents
+
+- [Data Structures](#data-structures)
+- [Angular Architecture](#angular-architecture)
+- [Node.js Server Architecture](#nodejs-server-architecture)
+- [Socket.IO API](#socketio-api)
+- [Client ↔ Server Flow](#client--server-flow)
+- [Authentication & Authorization](#authentication--authorization)
+- [Role Abilities](#role-abilities)
+- [REST Mapping (Future Plan)](#rest-mapping-future-plan)
 
 ## Data Structures
 
 ### Client-Side (Angular Models)
 
-ts
-// user.ts
-export interface User {
-  id: string;
-  username: string;   // unique key
-  email: string;
-  password: string;
-  roles: string[];    // 'chatUser' | 'groupAdmin' | 'superAdmin'
-  groups: string[];   // group ids the user belongs to
-}
+#### `user.ts`
 
-// channel.ts
-export interface Message { username: string; text: string; timestamp: Date; }
+```typescript
+export interface User {
+  id: string;           // Unique identifier
+  username: string;     // Unique key
+  email: string;        // User email
+  password: string;     // Hashed password
+  roles: string[];      // Possible values: 'chatUser', 'groupAdmin', 'superAdmin'
+  groups: string[];     // Array of group IDs the user belongs to
+}
+```
+
+#### `channel.ts`
+
+```typescript
+export interface Message {
+  username: string;     // Sender's username
+  text: string;         // Message content
+  timestamp: Date;      // Message timestamp
+}
 
 export interface Channel {
-  id: string;
-  name: string;
-  users: string[];       // usernames currently in the channel
-  messages: Message[];   // persisted messages
+  id: string;           // Unique channel ID
+  name: string;         // Channel name
+  users: string[];      // Usernames currently in the channel
+  messages: Message[];  // Persisted messages
 }
+```
 
-// group.ts
+#### `group.ts`
+
+```typescript
 export interface Group {
-  id: string;
-  name: string;
-  createdBy?: string;
-  admins: string[];          // usernames
-  members: string[];         // usernames
-  bannedMembers?: string[];  // usernames
-  channels: Channel[];
-  joinRequests: string[];    // pending usernames
+  id: string;           // Unique group ID
+  name: string;         // Group name
+  createdBy?: string;   // Username of creator (optional)
+  admins: string[];     // Usernames of group admins
+  members: string[];    // Usernames of group members
+  bannedMembers?: string[];  // Usernames of banned members (optional)
+  channels: Channel[];  // List of channels in the group
+  joinRequests: string[];   // Pending usernames requesting to join
 }
+```
 
-// report.ts
+#### `report.ts`
+
+```typescript
 export interface Report {
-  id: string;
-  groupId: string;
-  member: string;       // reported username
-  reportedBy: string;   // admin username
-  text: string;
-  timestamp: number;
+  id: string;           // Unique report ID
+  groupId: string;      // Associated group ID
+  member: string;       // Reported username
+  reportedBy: string;   // Admin username who reported
+  text: string;         // Report description
+  timestamp: number;    // Report timestamp
 }
+```
 
-##Angular Architecture
-###Components (Pages)
+## Angular Architecture
 
-login – sign in / sign up.
+### Components (Pages)
 
-current-groups – lists groups, join/leave, dashboard link.
+- **Login**: Handles user sign-in and sign-up functionality
+- **Current Groups**: Displays available groups, allows joining/leaving, and provides links to group dashboards
+- **Chat**: Discord-style layout with channels (left), messages (center), and channel members (right)
+- **Group Admin Dashboard**: Manages group settings, members, join requests, bans, and reports
+- **Super Dashboard**: Provides a global view for super admins, showing all groups, reports, and user promotion/demotion options
 
-chat – Discord-style layout: channels (left), messages (center), channel members (right).
+### Services
 
-group-admin-dashboard – manage groups, members, join requests, bans, reports.
+- **GroupService**: Central state manager, processes Socket.IO events, and updates Angular signals for real-time UI updates
+- **UserService**: Manages authentication, session persistence, and CRUD operations for users
+- **Sockets**: Low-level wrapper for Socket.IO communication
 
-super-dashboard – global view for super admins (all groups, reports, promotions).
+### Guards
 
-Services
+- **AuthGuard**: Enforces role-based access control for routes, ensuring users can only access authorized pages
 
-GroupService – central state manager, handles Socket.IO events, updates signals.
+### Models
 
-UserService – handles authentication, session persistence, CRUD for users.
+- `user.ts`
+- `group.ts`
+- `channel.ts`
+- `report.ts`
 
-Sockets – low-level Socket.IO wrapper.
+### Routes
 
-Guards
+- `/login`: Login and registration page
+- `/current-groups`: Displays groups with join/leave functionality
+- `/chat/:groupId`: Chat interface for a specific group
+- `/group-admin-dashboard`: Group management interface for group admins
+- `/super-dashboard`: Global management interface for super admins
 
-auth-guard – enforces role-based route access.
+## Node.js Server Architecture
 
-Models
+### Modules
 
-user.ts, group.ts, channel.ts, report.ts.
+- **express**: Web server framework for handling HTTP requests
+- **http**: Core HTTP server module
+- **socket.io**: Enables real-time, bidirectional communication
+- **cors**: Supports cross-origin resource sharing
 
-Routes
+### Global State
 
-/login
+- **Users**: Array storing all registered users
+- **Groups**: Array storing all groups
+- **Reports**: Array storing all reports
 
-/current-groups
+### Pattern
 
-/chat/:groupId
+- Incoming Socket.IO events mutate the global state
+- The server broadcasts updates to clients using events such as `groups:update`, `channels:*`, and `reports:update`
+- Clients remain synchronized with the server in real-time
 
-/group-admin-dashboard
+## Socket.IO API
 
-/super-dashboard
+### Groups
 
-###Node.js Server Architecture
-Modules
+| Event | Description |
+|-------|-------------|
+| `groups:getAll` | Returns a list of all groups |
+| `groups:create` | Creates a new group and broadcasts the update |
+| `groups:delete` | Deletes a group (restricted to group admins or super admins) |
+| `groups:requestJoin` | Adds a user to a group's join requests |
+| `groups:approveJoin` | Approves a join request (admin only) |
+| `groups:declineJoin` | Declines a join request (admin only) |
+| `groups:removeMember` | Removes a user from a group and its channels |
+| `groups:ban` | Moves a user to the group's banned list |
+| `groups:leave` | Allows a member to leave a group voluntarily |
 
-express, http, socket.io, cors
+### Channels
 
-Global State
+| Event | Description |
+|-------|-------------|
+| `channels:create` | Creates a new channel (admin or super admin only) |
+| `channels:delete` | Deletes a channel (admin or super admin only) |
+| `channels:join` | Adds a user to a channel's membership |
+| `channels:leave` | Removes a user from a channel's membership |
+| `channels:message` | Appends a message to a channel and broadcasts it |
+| `channels:getMessages` | Retrieves persisted messages for a channel |
 
-Arrays: users, groups, reports
+### Users & Roles
 
-Pattern
+| Event | Description |
+|-------|-------------|
+| `users:promote` | Assigns or updates user roles (e.g., promotes to group admin or super admin) |
+| `users:delete` | Deletes a user globally and cleans up related data |
 
-Each incoming Socket.IO event mutates state.
+### Reports
 
-Server broadcasts updates (groups:update, channels:*, reports:update).
+| Event | Description |
+|-------|-------------|
+| `reports:create` | Allows an admin to report a member, making the report visible to super admins |
 
-Clients stay synchronized in real-time.
+## Client ↔ Server Flow
 
-###Socket.IO API
-###Groups
+### Startup
 
-groups:getAll → returns all groups.
+1. Client emits `groups:getAll` to fetch all groups
+2. Server responds with `groups:update`, refreshing Angular signals to update the UI
 
-groups:create → create group (broadcast).
+### Join Channel
 
-groups:delete → delete (admin/super only).
+1. Client emits `channels:join` to join a channel
+2. Server updates channel membership, adds a system message, and broadcasts the update to all clients
 
-groups:requestJoin → add to join requests.
+### Send Message
 
-groups:approveJoin / groups:declineJoin → admin action.
+1. Client emits `channels:message` with the message content
+2. Server appends the message to the channel's message list and broadcasts it to all clients
+3. Client UI re-renders to display the new message
 
-groups:removeMember → remove user from group/channels.
+### Admin Actions
 
-groups:ban → move user to banned list.
+1. Actions like approving join requests, banning, or removing members are emitted to the server
+2. Server mutates the global state and broadcasts updates to all connected clients
 
-groups:leave → member self-removal.
+## Authentication & Authorization
 
-###Channels
+### Login/Register
 
-channels:create / channels:delete → admin/super only.
+- **UserService** manages user authentication and registration
+- Initial user seed includes a default super admin (e.g., username: `super`, password: `123`)
 
-channels:join / channels:leave → manage membership.
+### Session Management
 
-channels:message → append & broadcast message.
+- Successful login stores user data in `sessionStorage`
+- Logout clears `sessionStorage` and redirects to `/login`
 
-channels:getMessages → load persisted messages.
+### Guarded UI
 
-###Users & Roles
+- **AuthGuard** checks user roles to restrict route access
+- Angular templates use role-based conditions to show/hide actions (e.g., admin-only buttons)
 
-users:promote → assign roles.
+### Role Updates
 
-users:delete → global deletion, cleanup.
+- Server emits `users:roleUpdate` when a user's role changes
+- Client merges the update into its local state for real-time synchronization
 
-###Reports
+## Role Abilities
 
-reports:create → admin reports member → visible to super admins.
+### Super Admin
 
-###Client ↔ Server Flow
+- Inherits all group admin privileges
+- Can promote or demote users (e.g., assign `groupAdmin` or `superAdmin` roles)
+- Can remove any user from the system
+- Can view all reports across all groups
 
-Startup: groups:getAll → server emits groups:update → Angular signals refreshed.
+### Group Admin
 
-Join channel: client emits channels:join → server updates membership + system message → broadcasts.
+- Manages groups they own or administer
+- Can create/delete channels within their groups
+- Can approve or decline join requests
+- Can ban or remove members from their groups
+- Can report users to super admins
 
-Send message: client emits channels:message → server appends & broadcasts → UI re-renders.
+### Chat User
 
-Admin actions: (approve, ban, remove) → server mutates → broadcasts to all clients.
+- Can register and log in
+- Can join or leave groups
+- Can send messages in channels they are part of
+- Can delete their own account
 
-###Authentication & Authorization
+## REST Mapping (Future Plan)
 
-Login/Register: UserService manages user list (initial seed includes super/123).
+The following table outlines planned REST endpoints to complement or replace Socket.IO events:
 
-Session: Successful login saved in sessionStorage.
+| Socket.IO Event | REST Endpoint | HTTP Method | Purpose |
+|----------------|---------------|-------------|---------|
+| `groups:getAll` | `/api/groups` | GET | Fetch all groups |
+| `groups:create` | `/api/groups` | POST | Create a new group |
+| `groups:delete` | `/api/groups/:id` | DELETE | Delete a group |
+| `groups:requestJoin` | `/api/groups/:id/requests` | POST | Request to join a group |
+| `groups:approveJoin` | `/api/groups/:id/requests/:username/approve` | POST | Approve a join request |
+| `channels:create` | `/api/groups/:id/channels` | POST | Create a channel |
+| `channels:message` | `/api/groups/:gid/channels/:cid/messages` | POST | Send a message to a channel |
 
-Logout: clears session + redirects /login.
+---
 
-Guarded UI: auth-guard checks roles; templates hide/show actions based on roles.
-
-Role updates: server emits users:roleUpdate → merged into client state.
-
-###Role Abilities
-
-Super Admin
-
-All group admin powers
-
-Promote/demote users
-
-Remove any user
-
-View all reports
-
-Group Admin
-
-Manage groups they own
-
-Create/delete channels
-
-Approve/decline join requests
-
-Ban/remove members
-
-Report users
-
-Chat User
-
-Register/login
-
-Join/leave groups
-
-Chat in channels
-
-Delete own account
-
-###REST Mapping (Future Plan)
-Event	REST Endpoint	Purpose
-groups:getAll	GET /api/groups	Fetch groups
-groups:create	POST /api/groups	Create group
-groups:delete	DELETE /api/groups/:id	Delete group
-groups:requestJoin	POST /api/groups/:id/requests	Request to join
-groups:approveJoin	POST /api/groups/:id/requests/:username/approve	Approve join request
-channels:create	POST /api/groups/:id/channels	Create channel
-channels:message	POST /api/groups/:gid/channels/:cid/messages	Send message
+This documentation provides a clear and structured overview of the application's architecture, data models, and workflows, serving as a foundation for development, maintenance, and future enhancements.
