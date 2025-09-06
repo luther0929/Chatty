@@ -1,36 +1,143 @@
-<button (click)="goBack()">← Back to Groups</button>
+<div class="d-flex justify-content-center align-items-start min-vh-100 p-4"
+     style="background: linear-gradient(135deg, #E6D6F5, #F4EDFA); background-attachment: fixed;">
 
-<h2>{{ group()?.name }}</h2>
+  <div class="container" style="max-width: 900px;">
 
-@if(group()) {
-  <h3>Channels</h3>
-  <ul>
-    @for(c of group()?.channels; track $index) {
-      <li>
-        <button (click)="joinChannel(c.id, c.name)">
-          {{ c.name }}
-        </button>
-      </li>
-    }
-  </ul>
-
-  @if(currentChannel()) {
-    <!-- ✅ Show the active channel name -->
-    <h3>Currently in: {{ currentChannel()?.channelName }}</h3>
-
-    <div style="border: 1px solid #ccc; padding: 8px; height: 200px; overflow-y: auto;">
-      @for(m of messages(); track $index) {
-        <p>
-          <strong>{{ m.username || 'System' }}:</strong> {{ m.text }}
-          <em style="font-size: 0.8em;">({{ m.timestamp | date:'shortTime' }})</em>
-        </p>
-      }
+    <!-- Back Button -->
+    <div class="mb-4">
+      <button (click)="goBack()" 
+              class="btn btn-outline-secondary fw-semibold"
+              style="border-color: #9754CB; color: #6237A0; border-radius: 0.5rem;">
+        ← Back to Groups
+      </button>
     </div>
 
+    <!-- Group Name -->
+    <div class="card shadow-lg border-0 mb-4" style="border-radius: 1rem;">
+      <div class="card-header text-white fw-bold"
+           style="background: linear-gradient(90deg, #6237A0, #9754CB); border-radius: 1rem 1rem 0 0;">
+        {{ group()?.name }}
+      </div>
+      <div class="card-body">
 
-    <div style="margin-top: 10px;">
-      <input type="text" [(ngModel)]="messageText" placeholder="Type a message..." />
-      <button (click)="sendMessage()">Send</button>
+        <!-- Channels -->
+        @if(group()) {
+          <h5 class="fw-bold mb-3">Channels</h5>
+          <ul class="list-group mb-4">
+            @for(c of group()?.channels; track $index) {
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>{{ c.name }}</span>
+                <button (click)="joinChannel(c.id, c.name)" 
+                        class="btn btn-sm fw-semibold text-white"
+                        style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none; border-radius: 0.5rem;">
+                  Join
+                </button>
+              </li>
+            }
+          </ul>
+        }
+
+        <!-- Current Channel -->
+        @if(currentChannel()) {
+          <div class="mb-2 d-flex align-items-center justify-content-between">
+            <h6 class="fw-bold text-secondary m-0">
+              Currently in: <span class="text-dark">{{ currentChannel()?.channelName }}</span>
+            </h6>
+            <span class="badge" style="background: #f3ecff; color:#6237A0; border:1px solid #e7d8ff;">
+              {{ channelUserCount() }} member{{ channelUserCount() === 1 ? '' : 's' }}
+            </span>
+          </div>
+
+          <div class="row g-3">
+            <!-- LEFT: Messages -->
+            <div class="col-12 col-lg-9">
+              <div class="card shadow-sm border-0" style="border-radius: .75rem; background:#ffffff;">
+                <div class="card-body p-3" style="height: 420px; overflow-y: auto;">
+                  @for(m of messages(); track $index) {
+                    <div class="d-flex align-items-start gap-2 mb-3">
+                      <!-- Avatar -->
+                      <div
+                        class="d-inline-flex justify-content-center align-items-center flex-shrink-0"
+                        style="width:36px; height:36px; border-radius:50%;
+                              background: {{ gradientCSS }}; color:#fff; font-weight:700;">
+                        {{ initialOf(m.username || 'System') }}
+                      </div>
+
+                      <!-- Message bubble -->
+                      <div class="flex-grow-1">
+                        <div class="d-flex align-items-center gap-2">
+                          <strong class="text-dark">{{ m.username || 'System' }}</strong>
+                          <small class="text-muted">{{ m.timestamp | date:'shortTime' }}</small>
+                        </div>
+                        <div class="mt-1 p-2"
+                            style="background:#f8f8fb; border:1px solid #eee; border-radius:.5rem;">
+                          {{ m.text }}
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <!-- Message Input -->
+              <form (ngSubmit)="sendMessage()" class="d-flex mt-3">
+                <input
+                  type="text"
+                  [(ngModel)]="messageText"
+                  name="messageText"
+                  class="form-control me-2"
+                  placeholder="Type a message…"
+                  required />
+                <button type="submit" class="btn fw-semibold text-white"
+                        style="background: {{ gradientCSS }}; border:none; border-radius:.5rem;">
+                  Send
+                </button>
+              </form>
+            </div>
+
+            <!-- RIGHT: Members -->
+            <div class="col-12 col-lg-3">
+              <div class="card shadow-sm border-0" style="border-radius:.75rem; background:#ffffff;">
+                <div class="card-header border-0 d-flex align-items-center justify-content-between"
+                    style="background:#fff; border-radius:.75rem .75rem 0 0;">
+                  <span class="fw-semibold text-secondary text-uppercase" style="font-size:.85rem; letter-spacing:.04em;">
+                    Members
+                  </span>
+                  <span class="badge" style="background: #f3ecff; color:#6237A0; border:1px solid #e7d8ff;">
+                    {{ channelUserCount() }}
+                  </span>
+                </div>
+
+                <div class="card-body p-2" style="max-height: 420px; overflow-y: auto;">
+                  @if(channelUsers().length === 0) {
+                    <div class="text-center text-muted py-3" style="font-size:.9rem;">No members yet</div>
+                  } @else {
+                    <ul class="list-unstyled m-0">
+                      @for(u of channelUsers(); track $index) {
+                        <li class="d-flex align-items-center px-2 py-2 rounded mb-1"
+                            style="gap:.6rem; transition:background .15s;"
+                            onmouseover="this.style.background='#f8f8fb'"
+                            onmouseout="this.style.background='transparent'">
+                          <div class="d-inline-flex justify-content-center align-items-center"
+                              style="width:28px; height:28px; border-radius:50%;
+                                      background: {{ gradientCSS }}; color:#fff; font-weight:700; font-size:.85rem;">
+                            {{ u.slice(0,1).toUpperCase() }}
+                          </div>
+                          <div class="d-flex flex-column">
+                            <span class="fw-semibold" style="line-height:1;">{{ u }}</span>
+                            <small class="text-muted">Member</small>
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+
+      </div>
     </div>
-  }
-}
+  </div>
+</div>

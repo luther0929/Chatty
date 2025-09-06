@@ -3,4 +3,5 @@ export interface Channel {
   name: string;
   users: string[]; // optional: list of usernames in the channel
   messages: string[];
+  members: string[];
 }

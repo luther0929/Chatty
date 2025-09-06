@@ -1,13 +1,12 @@
 import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { NgIf } from '@angular/common';   // ✅ import NgIf
 import { UserService } from '../../services/user-service/user-service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, NgIf],   // ✅ add NgIf here
+  imports: [FormsModule],   // ✅ add NgIf here
   templateUrl: './login.html',
   styleUrl: './login.css'
 })

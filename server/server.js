@@ -329,33 +329,28 @@ io.on('connection', (socket) => {
     });
 
     socket.on('users:delete', (username) => {
-        // 1. Remove user from global users array
+        // Remove user globally
         users = users.filter(u => u.username !== username);
 
-        // 2. Cascade cleanup across groups
+        // Remove them from all groups
         groups.forEach(group => {
-            // Remove from members
             group.members = (group.members || []).filter(m => m !== username);
-
-            // Remove from admins
             group.admins = (group.admins || []).filter(a => a !== username);
-
-            // Remove from banned members
             group.bannedMembers = (group.bannedMembers || []).filter(b => b !== username);
-
-            // Remove from join requests
             group.joinRequests = (group.joinRequests || []).filter(r => r !== username);
 
-            // Remove from all channels
-            (group.channels || []).forEach(channel => {
+            if (group.channels) {
+            group.channels.forEach(channel => {
                 channel.users = (channel.users || []).filter(u => u !== username);
             });
+            }
         });
 
-        // 3. Broadcast updates
-        io.emit('groups:update', groups);
+        // Emit updates
         io.emit('users:update', users);
+        io.emit('groups:update', groups);
     });
+
 
 });
 

@@ -1,43 +1,90 @@
-@if(adminDashboardRoute) {
-  <p>
-    <a [routerLink]="adminDashboardRoute">Go to Admin Dashboard</a>
-  </p>
-}
-<button (click)="logout()">Logout</button>
-<button (click)="deleteAccount()" style="margin-left: 10px; color: red;">
-  Delete My Account
-</button>
+<div class="d-flex justify-content-center align-items-start min-vh-100 p-4"
+     style="
+       background: linear-gradient(135deg, #E6D6F5, #F4EDFA);
+       background-attachment: fixed;
+     ">
 
-<h2>My Groups</h2>
-<ul>
-  @for(g of myGroups; track $index) {
-    <li>
-      <a [routerLink]="['/chat', g.id]">{{ g.name }}</a>
-      <p>Admins: {{ g.admins.join(', ') }}</p>
-      <p>Members: {{ g.members.join(', ') }}</p>
+  <div class="container" style="max-width: 800px;">
 
-      <!-- ✅ Show leave button if current user is a member -->
-      @if(g.members.includes(currentUser?.username || '')) {
-        <button (click)="leaveGroup(g.id)">Leave Group</button>
+    <!-- Top Actions -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      @if(adminDashboardRoute) {
+        <a [routerLink]="adminDashboardRoute" 
+           class="btn text-white fw-semibold shadow-sm"
+           style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none; border-radius: 0.5rem;">
+          Go to Admin Dashboard
+        </a>
       }
-    </li>
-  }
-</ul>
 
-<h3>Available Groups</h3>
-<ul>
-  @for(g of availableGroups; track $index) {
-    <li>
-      {{ g.name }}
+      <div>
+        <button (click)="logout()" 
+                class="btn btn-outline-secondary fw-semibold me-2"
+                style="border-color: #9754CB; color: #6237A0; border-radius: 0.5rem;">
+          Logout
+        </button>
 
-      @if(!g.bannedMembers.includes(currentUser?.username || '')) {
-        <button (click)="requestJoin(g.id)">Request to Join</button>
-      }
-      @else {
-        <span style="color: red; font-size: 0.9em;">
-          You are banned from this group
-        </span>
-      }
-    </li>
-  }
-</ul>
+        <button (click)="deleteAccount()" 
+                class="btn fw-semibold text-white"
+                style="background: #dc3545; border: none; border-radius: 0.5rem;">
+          Delete My Account
+        </button>
+      </div>
+    </div>
+
+    <!-- My Groups -->
+    <div class="card shadow-lg border-0 mb-4" style="border-radius: 1rem;">
+      <div class="card-header text-white fw-bold"
+           style="background: linear-gradient(90deg, #6237A0, #9754CB); border-radius: 1rem 1rem 0 0;">
+        My Groups
+      </div>
+      <ul class="list-group list-group-flush">
+        @for(g of myGroups; track $index) {
+          <li class="list-group-item">
+            <h6 class="fw-bold mb-1">
+              <a [routerLink]="['/chat', g.id]" class="text-decoration-none text-dark">
+                {{ g.name }}
+              </a>
+            </h6>
+            <p class="mb-1"><strong>Admins:</strong> {{ g.admins.join(', ') }}</p>
+            <p class="mb-2"><strong>Members:</strong> {{ g.members.join(', ') }}</p>
+
+            @if(g.members.includes(currentUser?.username || '')) {
+              <button (click)="leaveGroup(g.id)" 
+                      class="btn btn-sm fw-semibold text-white"
+                      style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none; border-radius: 0.5rem;">
+                Leave Group
+              </button>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+
+    <!-- Available Groups -->
+    <div class="card shadow-lg border-0" style="border-radius: 1rem;">
+      <div class="card-header text-white fw-bold"
+           style="background: linear-gradient(90deg, #6237A0, #9754CB); border-radius: 1rem 1rem 0 0;">
+        Available Groups
+      </div>
+      <ul class="list-group list-group-flush">
+        @for(g of availableGroups; track $index) {
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>{{ g.name }}</span>
+
+            @if(!g.bannedMembers.includes(currentUser?.username || '')) {
+              <button (click)="requestJoin(g.id)" 
+                      class="btn btn-sm fw-semibold text-white"
+                      style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none; border-radius: 0.5rem;">
+                Request to Join
+              </button>
+            }
+            @else {
+              <span class="badge bg-danger">Banned</span>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+
+  </div>
+</div>

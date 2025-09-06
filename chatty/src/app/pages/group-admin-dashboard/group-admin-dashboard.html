@@ -1,102 +1,149 @@
-<button (click)="goBack()">⬅ Back to My Groups</button>
-<h2>Group Admin Dashboard</h2>
+<div class="d-flex justify-content-center align-items-start min-vh-100 p-4"
+     style="background: linear-gradient(135deg, #E6D6F5, #F4EDFA); background-attachment: fixed;">
 
-<form (ngSubmit)="addGroup()">
-  <label for="groupName">New Group</label>
-  <input
-    id="groupName"
-    type="text"
-    [ngModel]="groupName()"
-    (ngModelChange)="groupName.set($event)"
-    name="groupName"
-  />
-  <button type="submit">Create Group</button>
-</form>
+  <div class="container" style="max-width: 1000px;">
 
-<h3>Groups</h3>
-<ul>
-  @for(g of groups; track $index) {
-    <li>
-      <strong>{{ g.name }}</strong>
-      <p><b>Admins:</b> {{ g.admins.join(', ') }}</p>
-      <p><b>Members:</b></p>
-      <ul>
-        @for(m of g.members; track $index) {
-          <li>
-            {{ m }}
-            @if(
-              g.admins.includes(currentUser?.username || '') ||
-              currentUser?.roles?.includes('superAdmin')
-            ) {
-              <button (click)="removeMember(g.id, m)">Remove</button>
-              <button (click)="banMember(g.id, m)">Ban</button>
-              <input #reportText placeholder="Report reason" />
-              <button (click)="reportMember(g.id, m, reportText.value); reportText.value = ''">Report</button>
-            }
-          </li>
-        }
-      </ul>
+    <!-- Back Button -->
+    <div class="mb-4">
+      <button (click)="goBack()" 
+              class="btn btn-outline-secondary fw-semibold"
+              style="border-color: #9754CB; color: #6237A0; border-radius: 0.5rem;">
+        ⬅ Back to My Groups
+      </button>
+    </div>
 
-      <p><b>Banned Members:</b></p>
-      <ul>
-        @for(b of g.bannedMembers; track $index) {
-          <li>{{ b }}</li>
-        }
-      </ul>
+    <!-- Group Admin Dashboard -->
+    <div class="card shadow-lg border-0 mb-4" style="border-radius: 1rem;">
+      <div class="card-header text-white fw-bold"
+           style="background: linear-gradient(90deg, #6237A0, #9754CB); border-radius: 1rem 1rem 0 0;">
+        Group Admin Dashboard
+      </div>
+      <div class="card-body">
 
-      <p><b>Join Requests:</b></p>
-      <ul>
+        <!-- Create Group Form -->
+        <form (ngSubmit)="addGroup()" class="mb-4">
+          <div class="mb-3">
+            <label for="groupName" class="form-label fw-semibold">New Group</label>
+            <input id="groupName"
+                   type="text"
+                   [ngModel]="groupName()"
+                   (ngModelChange)="groupName.set($event)"
+                   name="groupName"
+                   class="form-control"
+                   placeholder="Enter group name" />
+          </div>
+          <button type="submit" 
+                  class="btn fw-semibold text-white"
+                  style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none; border-radius: 0.5rem;">
+            Create Group
+          </button>
+        </form>
 
-      @for(r of g.joinRequests; track $index) {
-        <li>
-          {{ r }}
-          @if((currentUser?.roles ?? []).includes('superAdmin') || g.admins.includes(currentUser?.username || '')) {
-            <button (click)="approveJoin(g.id, r)">Approve</button>
-            <button (click)="declineJoin(g.id, r)">Decline</button>
+        <!-- Groups List -->
+        <h5 class="fw-bold mb-3">Groups</h5>
+        <ul class="list-group">
+          @for(g of groups; track $index) {
+            <li class="list-group-item mb-3" style="border-radius: 0.5rem;">
+              <h6 class="fw-bold">{{ g.name }}</h6>
+              <p class="mb-1"><b>Admins:</b> {{ g.admins.join(', ') }}</p>
+              <p class="mb-1"><b>Members:</b></p>
+              <ul class="ms-3">
+                @for(m of g.members; track $index) {
+                  <li class="mb-1">
+                    {{ m }}
+                    @if(g.admins.includes(currentUser?.username || '') || currentUser?.roles?.includes('superAdmin')) {
+                      <button (click)="removeMember(g.id, m)" 
+                              class="btn btn-sm btn-outline-secondary me-1"
+                              style="border-color: #9754CB; color: #6237A0; border-radius: 0.5rem;">
+                        Remove
+                      </button>
+                      <button (click)="banMember(g.id, m)" 
+                              class="btn btn-sm text-white me-1"
+                              style="background: #dc3545; border: none; border-radius: 0.5rem;">
+                        Ban
+                      </button>
+                      <div class="d-inline-flex align-items-center">
+                        <input #reportText placeholder="Report reason" class="form-control form-control-sm me-1" />
+                        <button (click)="reportMember(g.id, m, reportText.value); reportText.value = ''" 
+                                class="btn btn-sm fw-semibold text-white"
+                                style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none; border-radius: 0.5rem;">
+                          Report
+                        </button>
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+
+              <p class="mt-3 mb-1"><b>Banned Members:</b></p>
+              <ul class="ms-3">
+                @for(b of g.bannedMembers; track $index) {
+                  <li><span class="badge bg-danger">{{ b }}</span></li>
+                }
+              </ul>
+
+              <p class="mt-3 mb-1"><b>Join Requests:</b></p>
+              <ul class="ms-3">
+                @for(r of g.joinRequests; track $index) {
+                  <li class="mb-1">
+                    {{ r }}
+                    @if((currentUser?.roles ?? []).includes('superAdmin') || g.admins.includes(currentUser?.username || '')) {
+                      <button (click)="approveJoin(g.id, r)" 
+                              class="btn btn-sm fw-semibold text-white me-1"
+                              style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none; border-radius: 0.5rem;">
+                        Approve
+                      </button>
+                      <button (click)="declineJoin(g.id, r)" 
+                              class="btn btn-sm btn-outline-secondary"
+                              style="border-color: #9754CB; color: #6237A0; border-radius: 0.5rem;">
+                        Decline
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+
+              @if(g.admins.includes(currentUser?.username || '') || currentUser?.roles?.includes('superAdmin')) {
+                <button (click)="deleteGroup(g.id)" 
+                        class="btn btn-sm text-white mt-2"
+                        style="background: #dc3545; border: none; border-radius: 0.5rem;">
+                  Delete Group
+                </button>
+              }
+
+              <p class="mt-3 mb-1"><b>Channels:</b></p>
+              <ul class="ms-3">
+                @for(c of g.channels; track $index) {
+                  <li class="mb-2">
+                    <strong>{{ c.name }}</strong>
+                    <p class="mb-1">Members: {{ (c.users || []).join(', ') || 'No members yet' }}</p>
+
+                    @if(g.admins.includes(currentUser?.username || '') || currentUser?.roles?.includes('superAdmin')) {
+                      <button (click)="deleteChannel(g.id, c.id)" 
+                              class="btn btn-sm text-white"
+                              style="background: #dc3545; border: none; border-radius: 0.5rem;">
+                        Delete Channel
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+
+              @if(g.admins.includes(currentUser?.username || '') || currentUser?.roles?.includes('superAdmin')) {
+                <div class="mt-2">
+                  <input #channelName placeholder="New channel name" class="form-control d-inline w-auto me-2" />
+                  <button (click)="createChannel(g.id, channelName.value)" 
+                          class="btn fw-semibold text-white"
+                          style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none; border-radius: 0.5rem;">
+                    Create Channel
+                  </button>
+                </div>
+              }
+            </li>
           }
-        </li>
-      }
+        </ul>
 
-      </ul>
-
-      @if(
-        g.admins.includes(currentUser?.username || '') ||
-        currentUser?.roles?.includes('superAdmin')
-      ) {
-        <button (click)="deleteGroup(g.id)">Delete Group</button>
-      }
-
-      <p><b>Channels:</b></p>
-      <ul>
-        @for(c of g.channels; track $index) {
-          <li>
-            <strong>{{ c.name }}</strong>
-
-            <!-- Members list -->
-            <p>Members: {{ (c.users || []).join(', ') || 'No members yet' }}</p>
-
-            <!-- Delete button only for admins/super admins -->
-            @if(
-              g.admins.includes(currentUser?.username || '') ||
-              currentUser?.roles?.includes('superAdmin')
-            ) {
-              <button (click)="deleteChannel(g.id, c.id)">Delete Channel</button>
-            }
-          </li>
-        }
-      </ul>
-
-      <!-- Channel creation form -->
-      @if(
-        g.admins.includes(currentUser?.username || '') ||
-        currentUser?.roles?.includes('superAdmin')
-      ) {
-        <input #channelName placeholder="New channel name" />
-        <button (click)="createChannel(g.id, channelName.value)">Create Channel</button>
-      }
-
-    </li>
-  }
-</ul>
-
-
+      </div>
+    </div>
+  </div>
+</div>

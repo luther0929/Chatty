@@ -1,16 +1,77 @@
-<h2 *ngIf="!isSignUpMode; else signUp">Login</h2>
-<ng-template #signUp><h2>Sign Up</h2></ng-template>
+<div class="d-flex justify-content-center align-items-center vh-100" 
+     style="background: linear-gradient(135deg, #28104E, #6237A0, #9754CB, #DEACFS);">
+  
+  <div class="card shadow-lg border-0" style="width: 420px; border-radius: 1rem;">
+    
+    <!-- Gradient Header -->
+    <div class="text-center py-4 rounded-top" 
+         style="background: linear-gradient(90deg, #6237A0, #9754CB); border-radius: 1rem 1rem 0 0;">
+      <h3 class="fw-bold mb-1 text-white">
+        {{ isSignUpMode ? 'Sign Up' : 'Log In' }}
+      </h3>
+      <p class="small mb-0 text-white-50">
+        {{ isSignUpMode ? 'Create your account to start chatting' : 'To get started learning' }}
+      </p>
+    </div>
 
-<form (ngSubmit)="onSubmit()">
-  <label for="username">Username</label>
-  <input id="username" [(ngModel)]="username" name="username" required />
+    <!-- Card Body -->
+    <div class="card-body p-4">
+      <form (ngSubmit)="onSubmit()">
+        
+        <!-- Username -->
+        <div class="mb-3">
+          <label for="username" class="form-label fw-semibold">Username</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
+            <input
+              id="username"
+              class="form-control"
+              [(ngModel)]="username"
+              name="username"
+              placeholder="Enter username"
+              required
+            />
+          </div>
+        </div>
 
-  <label for="password">Password</label>
-  <input id="password" type="password" [(ngModel)]="password" name="password" required />
+        <!-- Password -->
+        <div class="mb-3">
+          <label for="password" class="form-label fw-semibold">Password</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light"><i class="bi bi-lock"></i></span>
+            <input
+              id="password"
+              type="password"
+              class="form-control"
+              [(ngModel)]="password"
+              name="password"
+              placeholder="Enter password"
+              required
+            />
+          </div>
+        </div>
 
-  <button type="submit">{{ isSignUpMode ? 'Sign Up' : 'Login' }}</button>
-</form>
+        <!-- Submit -->
+        <button type="submit" 
+                class="btn w-100 py-2 fw-semibold shadow-sm text-white"
+                style="background: linear-gradient(90deg, #6237A0, #9754CB); border: none;">
+          {{ isSignUpMode ? 'Sign Up' : 'Log In' }}
+        </button>
+      </form>
 
-<a (click)="toggleMode()" style="cursor:pointer; color:blue;">
-  {{ isSignUpMode ? 'Already have an account?' : 'Create an account' }}
-</a>
+      <!-- Divider -->
+      <div class="text-center my-3">
+        <small class="text-muted">or</small>
+      </div>
+
+      <!-- Toggle -->
+      <div class="text-center">
+        <button class="btn w-100" 
+                style="border: 1px solid #9754CB; color: #6237A0; border-radius: 0.5rem;"
+                (click)="toggleMode()">
+          {{ isSignUpMode ? 'Already have an account? Log in' : 'Don’t have an account? Sign up now!' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

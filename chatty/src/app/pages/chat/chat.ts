@@ -21,6 +21,24 @@ export class Chat implements OnInit {
   groupId: string | null = null;
   messageText = signal('');
 
+  initialOf(name?: string): string {
+    const n = (name ?? '').trim();
+    return n ? n[0].toUpperCase() : '?';
+  }
+
+  gradientCSS = 'linear-gradient(90deg, #6237A0, #9754CB)';
+
+  channelUsers = computed(() => {
+    const cc = this.currentChannel();        // triggers on channel change
+    const groups = this.groupService.groups(); // triggers on server updates
+    if (!cc) return [];
+    const g = groups.find(g => g.id === cc.groupId);
+    const ch = g?.channels.find(c => c.id === cc.channelId);
+    return ch?.users ?? [];
+  });
+
+  channelUserCount = computed(() => this.channelUsers().length);
+
   group = computed(() => {
     if (!this.groupId) return null;
     return this.groupService.groups().find(g => g.id === this.groupId) || null;
@@ -34,6 +52,10 @@ export class Chat implements OnInit {
       this.groupId = params.get('groupId');
       this.groupService.initialize(); // ✅ fetch groups from server on refresh
     });
+  }
+
+  get currentUser() {
+    return this.userService.getCurrentUser();
   }
 
 
