@@ -7,10 +7,30 @@
   <ul>
     @for(c of group()?.channels; track $index) {
       <li>
-        {{ c.name }} ({{ c.users.length }} members)
+        <button (click)="joinChannel(c.id, c.name)">
+          {{ c.name }}
+        </button>
       </li>
     }
   </ul>
-} @else {
-  <p>Group not found.</p>
+
+  @if(currentChannel()) {
+    <!-- ✅ Show the active channel name -->
+    <h3>Currently in: {{ currentChannel()?.channelName }}</h3>
+
+    <div style="border: 1px solid #ccc; padding: 8px; height: 200px; overflow-y: auto;">
+      @for(m of messages(); track $index) {
+        <p>
+          <strong>{{ m.username || 'System' }}:</strong> {{ m.text }}
+          <em style="font-size: 0.8em;">({{ m.timestamp | date:'shortTime' }})</em>
+        </p>
+      }
+    </div>
+
+
+    <div style="margin-top: 10px;">
+      <input type="text" [(ngModel)]="messageText" placeholder="Type a message..." />
+      <button (click)="sendMessage()">Send</button>
+    </div>
+  }
 }

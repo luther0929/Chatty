@@ -7,12 +7,16 @@ export class GroupService {
   private storageKey = 'groups';
   private socket = inject(Sockets);
   groups = signal<Group[]>([]);
+  messages = signal<any[]>([]);
+  currentChannel = signal<{ groupId: string; channelId: string; channelName: string } | null>(null);
 
   constructor(private sockets: Sockets) {
-    this.sockets.listenForGroups((groups) => {
-      this.groups.set(groups);
+    this.sockets.listenForGroups((groups) => this.groups.set(groups));
+    this.sockets.on('channels:loadMessages', (msgs: any[]) => {
+      this.messages.set(msgs);
     });
     this.sockets.emit('groups:getAll')
+    this.listenForMessages();
   }
 
   initialize() {
@@ -74,12 +78,36 @@ export class GroupService {
     this.socket.on('reports:update', callback);
   }
 
-  joinChannel(groupId: string, channelId: string, username: string) {
-    this.socket.emit('channels:join', { groupId, channelId, username });
+  joinChannel(groupId: string, channelId: string, channelName: string, username: string) {
+    this.sockets.emit('channels:join', { groupId, channelId, username });
+    this.currentChannel.set({ groupId, channelId, channelName });
+    this.messages.set([]); // reset messages when entering new channel
+
+    // ask server for stored messages
+    this.sockets.emit('channels:getMessages', { groupId, channelId });
   }
 
   leaveGroup(groupId: string, username: string) {
     this.sockets.emit('groups:leave', { groupId, username });
+  }
+
+  leaveChannel() {
+    this.sockets.emit('channels:leave');
+    this.currentChannel.set(null);
+    this.messages.set([]);
+  }
+
+  sendMessage(groupId: string, channelId: string, username: string, text: string) {
+    this.sockets.emit('channels:message', { groupId, channelId, username, text });
+  }
+
+  listenForMessages() {
+    this.sockets.on('channels:message', (msg: any) => {
+      this.messages.update((m) => [...m, msg]);
+    });
+    this.sockets.on('channels:system', (msg: any) => {
+      this.messages.update((m) => [...m, msg]);
+    });
   }
 
 }

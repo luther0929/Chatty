@@ -150,7 +150,8 @@ io.on('connection', (socket) => {
         group.channels.push({
             id: channel.id,
             name: channel.name,
-            users: channel.users || []
+            users: channel.users || [],
+            messages: channel.messages || []
         });
         io.emit('groups:update', groups);
         }
@@ -190,37 +191,106 @@ io.on('connection', (socket) => {
     }
     });
 
+    // Track which channel each socket is in
+    socket.currentChannel = null;
+
     socket.on('channels:join', ({ groupId, channelId, username }) => {
+        if (socket.currentChannel) {
+            const [oldGroupId, oldChannelId] = socket.currentChannel.split(':');
+            const oldGroup = groups.find(g => g.id === oldGroupId);
+            if (oldGroup) {
+                const oldChannel = oldGroup.channels.find(c => c.id === oldChannelId);
+                if (oldChannel && oldChannel.users) {
+                    oldChannel.users = oldChannel.users.filter(u => u !== username);
+                }
+            }
+            socket.leave(socket.currentChannel);
+        }
+
+        socket.currentChannel = `${groupId}:${channelId}`;
+        socket.join(socket.currentChannel);
+
+        // Update group object in memory
+        const group = groups.find(g => g.id === groupId);
+        if (group) {
+            const channel = group.channels.find(c => c.id === channelId);
+            if (channel) {
+                if (!channel.users) channel.users = [];
+                if (!channel.users.includes(username)) {
+                    channel.users.push(username);
+                }
+            }
+        }
+
+        // Broadcast updated groups to everyone (so dashboards update)
+        io.emit('groups:update', groups);
+
+        // Send system message into channel
+        io.to(socket.currentChannel).emit('channels:system', {
+            username: 'System',
+            text: `${username} joined the channel`,
+            timestamp: new Date(),
+        });
+    });
+
+    socket.on('groups:leave', ({ groupId, username }) => {
+        const group = groups.find(g => g.id === groupId);
+        if (group) {
+            // Remove from group members
+            group.members = group.members.filter(m => m !== username);
+
+            // Also remove from channels
+            if (group.channels) {
+            group.channels.forEach(channel => {
+                channel.users = channel.users.filter(u => u !== username);
+            });
+            }
+
+            io.emit('groups:update', groups);
+        }
+    });
+
+    socket.on('channels:leave', ({ groupId, channelId, username }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        const channel = group.channels.find(c => c.id === channelId);
+        if (channel && channel.users) {
+        channel.users = channel.users.filter(u => u !== username);
+        }
+    }
+
+    socket.leave(`${groupId}:${channelId}`);
+    socket.currentChannel = null;
+
+    // notify all dashboards
+    io.emit('groups:update', groups);
+    });
+
+    socket.on('channels:message', ({ groupId, channelId, username, text }) => {
     const group = groups.find(g => g.id === groupId);
     if (group) {
         const channel = group.channels.find(c => c.id === channelId);
         if (channel) {
-        if (group.members.includes(username) || group.admins.includes(username)) {
-            if (!channel.users.includes(username)) {
-            channel.users.push(username);
-            }
-            io.emit('groups:update', groups);
-        } else {
-            socket.emit('channels:joinFailed', { groupId, channelId, reason: 'not-group-member' });
-        }
+        const msg = { username, text, timestamp: new Date() };
+        if (!channel.messages) channel.messages = [];
+        channel.messages.push(msg);
+
+        // broadcast to channel
+        io.to(`${groupId}:${channelId}`).emit('channels:message', msg);
+
+        // broadcast groups:update so dashboards see latest messages
+        io.emit('groups:update', groups);
         }
     }
     });
 
-    socket.on('groups:leave', ({ groupId, username }) => {
+    socket.on('channels:getMessages', ({ groupId, channelId }) => {
     const group = groups.find(g => g.id === groupId);
     if (group) {
-        // Remove from group members
-        group.members = group.members.filter(m => m !== username);
-
-        // Also remove from channels
-        if (group.channels) {
-        group.channels.forEach(channel => {
-            channel.users = channel.users.filter(u => u !== username);
-        });
+        const channel = group.channels.find(c => c.id === channelId);
+        if (channel) {
+        socket.emit('channels:loadMessages', channel.messages || []);
         }
-
-        io.emit('groups:update', groups);
     }
     });
 
