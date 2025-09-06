@@ -1,0 +1,20 @@
+<h2>My Groups</h2>
+<ul>
+  @for(g of myGroups; track $index) {
+    <li>
+      <strong>{{ g.name }}</strong>
+      <p>Admins: {{ g.admins.join(', ') }}</p>
+      <p>Members: {{ g.members.join(', ') }}</p>
+    </li>
+  }
+</ul>
+
+<h3>Available Groups</h3>
+<ul>
+  @for(g of availableGroups; track $index) {
+    <li>
+      <strong>{{ g.name }}</strong>
+      <button (click)="joinGroup(g.id)">Join</button>
+    </li>
+  }
+</ul>

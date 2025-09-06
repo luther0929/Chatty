@@ -1,0 +1,10 @@
+<label for="messageout">New Message</label>
+<input type="text" [ngModel]="messageout()" (ngModelChange)="messageout.set($event)" name="messageout" id="messageout"/>
+<button (click)="send()">Submit</button>
+
+<h3>Messages</h3>
+<ul>
+  @for(message of messagein(); track $index){
+    <li>{{message}}</li>
+  }
+</ul>

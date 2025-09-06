@@ -1,0 +1,51 @@
+<h2>Super Admin Dashboard</h2>
+
+<form (ngSubmit)="addGroup()">
+  <label for="groupName">New Group</label>
+  <input
+    id="groupName"
+    type="text"
+    [ngModel]="groupName()"
+    (ngModelChange)="groupName.set($event)"
+    name="groupName"
+  />
+  <button type="submit">Create Group</button>
+</form>
+
+<h3>Groups</h3>
+<ul>
+  @for(g of groups; track $index) {
+    <li>
+      <strong>{{ g.name }}</strong>
+      <p><b>Admins:</b> {{ g.admins.join(', ') }}</p>
+      <p><b>Members:</b></p>
+      <ul>
+        @for(m of g.members; track $index) {
+          <li>
+            {{ m }}
+
+            <!-- Promote chatUser -> groupAdmin -->
+            @if(!g.admins.includes(m) && !superAdmins.includes(m)) {
+              <button (click)="promoteUser(g.id, m, 'groupAdmin')">
+                Promote to Group Admin
+              </button>
+            }
+
+            <!-- Promote chatUser or groupAdmin -> superAdmin -->
+            @if(!superAdmins.includes(m)) {
+              <button (click)="promoteUser(g.id, m, 'superAdmin')">
+                Promote to Super Admin
+              </button>
+            }
+
+            <!-- Remove member -->
+            <button (click)="removeMember(g.id, m)">
+              Remove from Group
+            </button>
+          </li>
+        }
+      </ul>
+      <button (click)="deleteGroup(g.id)">Delete Group</button>
+    </li>
+  }
+</ul>
