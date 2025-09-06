@@ -89,4 +89,12 @@ export class SuperDashboard {
     }
   }
 
+  approveJoin(groupId: string, username: string) {
+    this.groupService.approveJoin(groupId, username);
+  }
+
+  declineJoin(groupId: string, username: string) {
+    this.groupService.declineJoin(groupId, username);
+  }
+
 }

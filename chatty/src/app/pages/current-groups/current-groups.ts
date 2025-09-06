@@ -42,14 +42,6 @@ export class CurrentGroups {
     );
   }
 
-
-  joinGroup(groupId: string) {
-    const current = this.user();
-    if (current) {
-      this.groupService.joinGroup(groupId, current.username);
-    }
-  }
-
   promote(groupId: string, username: string) {
     this.groupService.promoteToAdmin(groupId, username);
   }
@@ -70,6 +62,13 @@ export class CurrentGroups {
     const user = this.userService.getCurrentUser();
     if (!user) return;
     this.groupService.leaveGroup(groupId, user.username);
+  }
+
+  requestJoin(groupId: string) {
+    const current = this.userService.getCurrentUser();
+    if (current) {
+      this.groupService.requestJoinGroup(groupId, current.username);
+    }
   }
 
 }

@@ -27,7 +27,7 @@
       {{ g.name }}
 
       @if(!g.bannedMembers.includes(currentUser?.username || '')) {
-        <button (click)="joinGroup(g.id)">Join</button>
+        <button (click)="requestJoin(g.id)">Request to Join</button>
       }
       @else {
         <span style="color: red; font-size: 0.9em;">

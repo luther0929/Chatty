@@ -43,6 +43,17 @@
         }
       </ul>
 
+      <p><b>Join Requests:</b></p>
+      <ul>
+        @for(r of g.joinRequests; track $index) {
+          <li>
+            {{ r }}
+            <button (click)="approveJoin(g.id, r)">Approve</button>
+            <button (click)="declineJoin(g.id, r)">Decline</button>
+          </li>
+        }
+      </ul>
+
       @if(
         g.admins.includes(currentUser?.username || '') ||
         currentUser?.roles?.includes('superAdmin')

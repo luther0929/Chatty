@@ -8,4 +8,5 @@ export interface Group {
   members: string[]; // array of userIds who are members
   bannedMembers: string[]; // array of userIds who are banned
   channels: Channel[];
+  joinRequests: string[];
 }

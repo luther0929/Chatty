@@ -34,7 +34,8 @@ io.on('connection', (socket) => {
         admins: group.admins || [],
         members: group.members || [],
         bannedMembers: group.bannedMembers || [],
-        channels: group.channels || []
+        channels: group.channels || [],
+        joinRequests: group.joinRequests || []
     };
     groups.push(newGroup);
     io.emit('groups:update', groups);
@@ -293,6 +294,33 @@ io.on('connection', (socket) => {
         }
     }
     });
+
+    socket.on('groups:requestJoin', ({ groupId, username }) => {
+        const group = groups.find(g => g.id === groupId);
+        if (group && !group.joinRequests.includes(username)) {
+            group.joinRequests.push(username);
+            io.emit('groups:update', groups); // broadcast updated state
+        }
+    });
+
+    socket.on('groups:approveJoin', ({ groupId, username }) => {
+        const group = groups.find(g => g.id === groupId);
+        if (group) {
+            group.joinRequests = group.joinRequests.filter(u => u !== username);
+            if (!group.members.includes(username)) {
+                group.members.push(username);
+            }
+            io.emit('groups:update', groups);
+        }
+    });
+
+    socket.on('groups:declineJoin', ({ groupId, username }) => {
+        const group = groups.find(g => g.id === groupId);
+        if (group) {
+            group.joinRequests = group.joinRequests.filter(u => u !== username);
+            io.emit('groups:update', groups);
+        }
+    });  
 
 });
 

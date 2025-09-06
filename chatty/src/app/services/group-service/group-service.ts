@@ -36,8 +36,8 @@ export class GroupService {
     return this.groups();
   }
 
-  joinGroup(groupId: string, username: string) {
-    this.socket.emit('groups:join', { groupId, username });
+  requestJoinGroup(groupId: string, username: string) {
+    this.sockets.emit('groups:requestJoin', { groupId, username });
   }
 
   promoteToAdmin(groupId: string, username: string) {
@@ -108,6 +108,14 @@ export class GroupService {
     this.sockets.on('channels:system', (msg: any) => {
       this.messages.update((m) => [...m, msg]);
     });
+  }
+
+  approveJoin(groupId: string, username: string) {
+    this.sockets.emit('groups:approveJoin', { groupId, username });
+  }
+
+  declineJoin(groupId: string, username: string) {
+    this.sockets.emit('groups:declineJoin', { groupId, username });
   }
 
 }

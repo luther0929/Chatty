@@ -55,6 +55,19 @@
         }
       </ul>
 
+      <h3>Reports</h3>
+      <ul>
+        @for(r of reports(); track $index) {
+          <li>
+            <strong>Member:</strong> {{ r.member }} <br />
+            <strong>Reported by:</strong> {{ r.reportedBy }} <br />
+            <strong>Group:</strong> {{ r.groupId }} <br />
+            <strong>Reason:</strong> {{ r.text }} <br />
+            <em>{{ r.timestamp | date:'short' }}</em>
+          </li>
+        }
+      </ul>
+
       <button (click)="deleteGroup(g.id)">Delete Group</button>
 
       <p><b>Channels:</b></p>
@@ -85,19 +98,6 @@
         <input #channelName placeholder="New channel name" />
         <button (click)="createChannel(g.id, channelName.value)">Create Channel</button>
       }
-    </li>
-  }
-</ul>
-
-<h3>Reports</h3>
-<ul>
-  @for(r of reports(); track $index) {
-    <li>
-      <strong>Member:</strong> {{ r.member }} <br />
-      <strong>Reported by:</strong> {{ r.reportedBy }} <br />
-      <strong>Group:</strong> {{ r.groupId }} <br />
-      <strong>Reason:</strong> {{ r.text }} <br />
-      <em>{{ r.timestamp | date:'short' }}</em>
     </li>
   }
 </ul>
