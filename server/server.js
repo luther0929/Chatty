@@ -32,6 +32,55 @@ io.on('connection', (socket) => {
         groups = groups.filter(g => g.id !== groupId);
         io.emit('groups:update', groups);
     });
+
+    socket.on('groups:join', ({ groupId, username }) => {
+        const group = groups.find(g => g.id === groupId);
+        if (group && !group.members.includes(username)) {
+            group.members.push(username);
+            io.emit('groups:update', groups);
+        }
+    });
+
+
+    socket.on('groups:promote', ({ groupId, username }) => {
+        const group = groups.find(g => g.id === groupId);
+        if (group) {
+            // make sure user is a member first
+            if (group.members.includes(username) && !group.admins.includes(username)) {
+            group.admins.push(username);
+            io.emit('groups:update', groups);  // broadcast to all clients
+            }
+        }
+    });
+
+    socket.on('users:promote', ({ username, role, groupId }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    if (role === 'groupAdmin') {
+        // Remove from members if exists
+        group.members = group.members.filter(m => m !== username);
+
+        // Add to admins if not already
+        if (!group.admins.includes(username)) {
+        group.admins.push(username);
+        }
+    }
+
+    io.emit('users:roleUpdate', { username, role });
+    io.emit('groups:update', groups);
+    });
+
+    socket.on('groups:removeMember', ({ groupId, username }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        // Remove from members list
+        group.members = group.members.filter(m => m !== username);
+
+        io.emit('groups:update', groups);  // broadcast update
+    }
+    });
+
 });
 
 server.listen(PORT, () => {
