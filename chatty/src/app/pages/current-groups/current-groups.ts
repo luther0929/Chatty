@@ -71,4 +71,8 @@ export class CurrentGroups {
     }
   }
 
+  logout() {
+    this.userService.logout(); // clear signal + localStorage
+  }
+
 }

@@ -116,7 +116,10 @@ export class UserService {
 
   logout() {
     this.currentUser = null;
+    localStorage.removeItem('currentUser');
     sessionStorage.removeItem('currentUser');
+    localStorage.clear();                // extra safety
+    sessionStorage.clear();              // clear session if used
     this.router.navigate(['/login']);
   }
 
@@ -133,5 +136,26 @@ export class UserService {
   getAllUsers(): User[] {
     return [...USERS];  // return a copy of the hardcoded USERS array
   }
+
+  register(username: string, password: string): boolean {
+    // check uniqueness
+    const existing = USERS.find(u => u.username === username);
+    if (existing) return false;
+
+    const newUser: User = {
+      id: (USERS.length + 1).toString(),
+      username,
+      email: `${username}@example.com`, // optional stub
+      password,
+      roles: ['chatUser'], // default role
+      groups: []
+    };
+
+    USERS.push(newUser);
+    this.currentUser = newUser;
+    sessionStorage.setItem('currentUser', JSON.stringify(newUser));
+    return true;
+  }
+
 
 }

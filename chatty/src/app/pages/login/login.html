@@ -1,9 +1,16 @@
+<h2 *ngIf="!isSignUpMode; else signUp">Login</h2>
+<ng-template #signUp><h2>Sign Up</h2></ng-template>
+
 <form (ngSubmit)="onSubmit()">
   <label for="username">Username</label>
-  <input id="username" [ngModel]="username()" (ngModelChange)="username.set($event)" name="username" />
+  <input id="username" [(ngModel)]="username" name="username" required />
 
   <label for="password">Password</label>
-  <input id="password" type="password" [ngModel]="password()" (ngModelChange)="password.set($event)" name="password" />
+  <input id="password" type="password" [(ngModel)]="password" name="password" required />
 
-  <button type="submit">Login</button>
+  <button type="submit">{{ isSignUpMode ? 'Sign Up' : 'Login' }}</button>
 </form>
+
+<a (click)="toggleMode()" style="cursor:pointer; color:blue;">
+  {{ isSignUpMode ? 'Already have an account?' : 'Create an account' }}
+</a>
