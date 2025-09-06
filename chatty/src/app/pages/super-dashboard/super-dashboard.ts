@@ -19,6 +19,10 @@ export class SuperDashboard {
     return this.groupService.groups();
   }
 
+  get currentUser() {
+    return this.userService.getCurrentUser();
+  }
+
   addGroup() {
     const name = this.groupName().trim();
     if (!name) return;
@@ -30,8 +34,11 @@ export class SuperDashboard {
     this.groupName.set('');
   }
 
-  deleteGroup(id: string) {
-    this.groupService.deleteGroup(id);
+  deleteGroup(groupId: string) {
+    const current = this.userService.getCurrentUser();
+    if (current) {
+      this.groupService.deleteGroup(groupId, current.username, current.roles[0]); // pass role
+    }
   }
 
   promoteUser(groupId: string, username: string, role: string) {
@@ -46,7 +53,31 @@ export class SuperDashboard {
   }
 
   removeMember(groupId: string, username: string) {
-    this.groupService.removeMember(groupId, username);
+    const current = this.userService.getCurrentUser();
+    if (current) {
+      this.groupService.removeMember(groupId, username, current.username, current.roles[0]); // pass role
+    }
+  }
+
+  banMember(groupId: string, username: string) {
+    const current = this.userService.getCurrentUser();
+    if (current) {
+      this.groupService.banMember(groupId, username, current.username, current.roles[0]);
+    }
+  }
+
+  createChannel(groupId: string, channelName: string) {
+    const current = this.userService.getCurrentUser();
+    if (current) {
+      this.groupService.createChannel(groupId, channelName, current.username, current.roles[0]);
+    }
+  }
+
+  deleteChannel(groupId: string, channelId: string) {
+    const current = this.userService.getCurrentUser();
+    if (current) {
+      this.groupService.deleteChannel(groupId, channelId, current.username, current.roles[0]);
+    }
   }
 
 }

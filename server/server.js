@@ -24,23 +24,42 @@ io.on('connection', (socket) => {
     });
 
     socket.on('groups:create', (group) => {
-        groups.push(group); // store in memory or DB
-        io.emit('groups:update', groups); // broadcast to all clients
+    const newGroup = {
+        ...group,
+        admins: group.admins || [],
+        members: group.members || [],
+        bannedMembers: group.bannedMembers || [],
+        channels: group.channels || []
+    };
+    groups.push(newGroup);
+    io.emit('groups:update', groups);
     });
 
-    socket.on('groups:delete', (groupId) => {
+    socket.on('groups:delete', ({ groupId, performedBy, role }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        // ✅ Allow if user is group admin OR super admin
+        if (group.admins.includes(performedBy) || role === 'superAdmin') {
         groups = groups.filter(g => g.id !== groupId);
         io.emit('groups:update', groups);
+        }
+    }
     });
 
     socket.on('groups:join', ({ groupId, username }) => {
-        const group = groups.find(g => g.id === groupId);
-        if (group && !group.members.includes(username)) {
-            group.members.push(username);
-            io.emit('groups:update', groups);
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        if (group.bannedMembers.includes(username)) {
+        socket.emit('groups:joinFailed', { groupId, reason: 'banned' });
+        return;
         }
-    });
 
+        if (!group.members.includes(username)) {
+        group.members.push(username);
+        io.emit('groups:update', groups);
+        }
+    }
+    });
 
     socket.on('groups:promote', ({ groupId, username }) => {
         const group = groups.find(g => g.id === groupId);
@@ -71,15 +90,59 @@ io.on('connection', (socket) => {
     io.emit('groups:update', groups);
     });
 
-    socket.on('groups:removeMember', ({ groupId, username }) => {
+    socket.on('groups:removeMember', ({ groupId, username, performedBy, role }) => {
     const group = groups.find(g => g.id === groupId);
     if (group) {
-        // Remove from members list
+        if (group.admins.includes(performedBy) || role === 'superAdmin') {
         group.members = group.members.filter(m => m !== username);
-
-        io.emit('groups:update', groups);  // broadcast update
+        io.emit('groups:update', groups);
+        }
     }
     });
+
+    socket.on('groups:ban', ({ groupId, username, performedBy, role }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        if (group.admins.includes(performedBy) || role === 'superAdmin') {
+        group.members = group.members.filter(m => m !== username);
+
+        group.bannedMembers = group.bannedMembers || [];
+
+        if (!group.bannedMembers.includes(username)) {
+            group.bannedMembers.push(username);
+        }
+
+        io.emit('groups:update', groups);
+        }
+    }
+    });
+
+    socket.on('channels:create', ({ groupId, channel, performedBy, role }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        // Only group admins or super admins can create channels
+        if (group.admins.includes(performedBy) || role === 'superAdmin') {
+        group.channels = group.channels || [];
+        group.channels.push({
+            id: channel.id,
+            name: channel.name,
+            users: channel.users || []
+        });
+        io.emit('groups:update', groups);
+        }
+    }
+    });
+
+    socket.on('channels:delete', ({ groupId, channelId, performedBy, role }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        if (group.admins.includes(performedBy) || role === 'superAdmin') {
+        group.channels = group.channels.filter(c => c.id !== channelId);
+        io.emit('groups:update', groups);
+        }
+    }
+    });
+
 
 });
 

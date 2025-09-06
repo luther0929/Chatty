@@ -19,8 +19,8 @@ export class GroupService {
     this.socket.emit('groups:create', newGroup);
   }
 
-  deleteGroup(id: string) {
-    this.socket.emit('groups:delete', id);
+  deleteGroup(groupId: string, performedBy: string, role: string) {
+    this.socket.emit('groups:delete', { groupId, performedBy, role });
   }
 
   getGroups(): Group[] {
@@ -39,8 +39,26 @@ export class GroupService {
     this.socket.emit('users:promote', { username, role, groupId });
   }
 
-  removeMember(groupId: string, username: string) {
-    this.socket.emit('groups:removeMember', { groupId, username });
+  removeMember(groupId: string, username: string, performedBy: string, role: string) {
+    this.socket.emit('groups:removeMember', { groupId, username, performedBy, role });
+  }
+
+  banMember(groupId: string, username: string, performedBy: string, role: string) {
+    this.socket.emit('groups:ban', { groupId, username, performedBy, role });
+  }
+
+  createChannel(groupId: string, channelName: string, performedBy: string, role: string) {
+    const channel = {
+      id: crypto.randomUUID(),
+      name: channelName,
+      users: []
+    };
+
+    this.socket.emit('channels:create', { groupId, channel, performedBy, role });
+  }
+
+  deleteChannel(groupId: string, channelId: string, performedBy: string, role: string) {
+    this.socket.emit('channels:delete', { groupId, channelId, performedBy, role });
   }
 
 }

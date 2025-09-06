@@ -42,10 +42,49 @@
             <button (click)="removeMember(g.id, m)">
               Remove from Group
             </button>
+            <!-- Ban member -->
+            <button (click)="banMember(g.id, m)">Ban</button>
           </li>
         }
       </ul>
+
+      <p><b>Banned Members:</b></p>
+      <ul>
+        @for(b of g.bannedMembers; track $index) {
+          <li>{{ b }}</li>
+        }
+      </ul>
+
       <button (click)="deleteGroup(g.id)">Delete Group</button>
+
+      <p><b>Channels:</b></p>
+      <ul>
+        @for(c of g.channels; track $index) {
+          <li>
+            <strong>{{ c.name }}</strong>
+
+            <!-- Members list -->
+            <p>Members: {{ (c.users || []).join(', ') || 'No members yet' }}</p>
+
+            <!-- Delete button only for admins/super admins -->
+            @if(
+              g.admins.includes(currentUser?.username || '') ||
+              currentUser?.roles?.includes('superAdmin')
+            ) {
+              <button (click)="deleteChannel(g.id, c.id)">Delete Channel</button>
+            }
+          </li>
+        }
+      </ul>
+
+      <!-- Channel creation form -->
+      @if(
+        g.admins.includes(currentUser?.username || '') ||
+        currentUser?.roles?.includes('superAdmin')
+      ) {
+        <input #channelName placeholder="New channel name" />
+        <button (click)="createChannel(g.id, channelName.value)">Create Channel</button>
+      }
     </li>
   }
 </ul>

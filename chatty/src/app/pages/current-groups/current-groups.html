@@ -13,8 +13,16 @@
 <ul>
   @for(g of availableGroups; track $index) {
     <li>
-      <strong>{{ g.name }}</strong>
-      <button (click)="joinGroup(g.id)">Join</button>
+      {{ g.name }}
+
+      @if(!g.bannedMembers.includes(currentUser?.username || '')) {
+        <button (click)="joinGroup(g.id)">Join</button>
+      }
+      @else {
+        <span style="color: red; font-size: 0.9em;">
+          You are banned from this group
+        </span>
+      }
     </li>
   }
 </ul>

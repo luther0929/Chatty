@@ -69,6 +69,14 @@ const USERS: User[] = [
     roles: ['chatUser'],
     groups: []
   },
+  {
+    id: '8',
+    username: 'groupAdmin',
+    email: 'groupAdmin@example.com',
+    password: '123',
+    roles: ['chatUser'],
+    groups: []
+  },
 ];
 
 

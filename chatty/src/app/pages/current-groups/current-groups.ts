@@ -17,6 +17,10 @@ export class CurrentGroups {
 
   user = signal<User | null>(this.userService.getCurrentUser());
 
+  get currentUser() {
+    return this.userService.getCurrentUser();
+  }
+
   get myGroups(): GroupModel[] {
     const current = this.user();
     if (!current) return [];
@@ -30,6 +34,7 @@ export class CurrentGroups {
   get availableGroups(): GroupModel[] {
     const current = this.user();
     if (!current) return [];
+
     return this.groupService.getGroups().filter(g =>
       !(g.members?.includes(current.username)) &&
       !(g.admins?.includes(current.username))
