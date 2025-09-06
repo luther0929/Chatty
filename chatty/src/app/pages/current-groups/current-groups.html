@@ -1,3 +1,9 @@
+@if(adminDashboardRoute) {
+  <p>
+    <a [routerLink]="adminDashboardRoute">Go to Admin Dashboard</a>
+  </p>
+}
+
 <h2>My Groups</h2>
 <ul>
   @for(g of myGroups; track $index) {

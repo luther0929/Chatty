@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { RouterModule } from '@angular/router';
 import { UserService} from '../../services/user-service/user-service';
 import { User } from '../../models/user';
 import { GroupService } from '../../services/group-service/group-service';
@@ -7,7 +8,7 @@ import { Group as GroupModel } from '../../models/group';
 @Component({
   selector: 'app-current-groups',
   standalone: true,
-  imports: [],
+  imports: [RouterModule],
   templateUrl: './current-groups.html',
   styleUrl: './current-groups.css'
 })
@@ -53,5 +54,16 @@ export class CurrentGroups {
     this.groupService.promoteToAdmin(groupId, username);
   }
 
+  get adminDashboardRoute(): string | null {
+    const current = this.userService.getCurrentUser();
+    if (!current) return null;
+
+    if (current.roles.includes('superAdmin')) {
+      return '/super-dashboard';
+    } else if (current.roles.includes('groupAdmin')) {
+      return '/group-admin-dashboard';
+    }
+    return null;
+  }
 
 }
