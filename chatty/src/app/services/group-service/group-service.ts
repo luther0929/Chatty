@@ -61,4 +61,12 @@ export class GroupService {
     this.socket.emit('channels:delete', { groupId, channelId, performedBy, role });
   }
 
+  createReport(groupId: string, member: string, reportedBy: string, text: string) {
+    this.socket.emit('reports:create', { groupId, member, reportedBy, text });
+  }
+
+  listenForReports(callback: (reports: Report[]) => void) {
+    this.socket.on('reports:update', callback);
+  }
+
 }

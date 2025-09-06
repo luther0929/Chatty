@@ -88,3 +88,17 @@
     </li>
   }
 </ul>
+
+<h3>Reports</h3>
+<ul>
+  @for(r of reports(); track $index) {
+    <li>
+      <strong>Member:</strong> {{ r.member }} <br />
+      <strong>Reported by:</strong> {{ r.reportedBy }} <br />
+      <strong>Group:</strong> {{ r.groupId }} <br />
+      <strong>Reason:</strong> {{ r.text }} <br />
+      <em>{{ r.timestamp | date:'short' }}</em>
+    </li>
+  }
+</ul>
+

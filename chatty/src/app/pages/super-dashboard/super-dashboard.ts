@@ -2,10 +2,12 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GroupService } from '../../services/group-service/group-service';
 import { UserService } from '../../services/user-service/user-service';
+import { Report } from '../../models/report';
+import { DatePipe } from '@angular/common';
 
 @Component({
   selector: 'app-super-dashboard',
-  imports: [FormsModule],
+  imports: [FormsModule, DatePipe],
   templateUrl: './super-dashboard.html',
   styleUrl: './super-dashboard.css'
 })
@@ -14,6 +16,13 @@ export class SuperDashboard {
   private userService = inject(UserService);
 
   groupName = signal('');
+  reports = signal<Report[]>([]);
+
+  constructor() {
+    this.groupService.listenForReports((reports) => {
+    this.reports.set(reports as unknown as Report[]);
+  });
+  }
 
   get groups() {
     return this.groupService.groups();

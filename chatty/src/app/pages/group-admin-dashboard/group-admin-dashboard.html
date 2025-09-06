@@ -29,6 +29,8 @@
             ) {
               <button (click)="removeMember(g.id, m)">Remove</button>
               <button (click)="banMember(g.id, m)">Ban</button>
+              <input #reportText placeholder="Report reason" />
+              <button (click)="reportMember(g.id, m, reportText.value); reportText.value = ''">Report</button>
             }
           </li>
         }

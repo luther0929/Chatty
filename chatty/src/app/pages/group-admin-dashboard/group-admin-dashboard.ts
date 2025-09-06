@@ -72,4 +72,11 @@ export class GroupAdminDashboard {
     }
   }
 
+  reportMember(groupId: string, member: string, text: string) {
+    const current = this.userService.getCurrentUser();
+    if (current) {
+      this.groupService.createReport(groupId, member, current.username, text);
+    }
+  }
+
 }

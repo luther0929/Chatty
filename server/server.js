@@ -143,6 +143,28 @@ io.on('connection', (socket) => {
     }
     });
 
+    let reports = []; // store all reports in memory for now
+
+    socket.on('reports:create', ({ groupId, member, reportedBy, text }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        // Ensure only group admins or super admins can report
+        if (group.admins.includes(reportedBy)) {
+        const report = {
+            id: crypto.randomUUID(),
+            groupId,
+            member,
+            reportedBy,
+            text,
+            timestamp: Date.now()
+        };
+        reports.push(report);
+
+        // Send reports to super admins only
+        io.emit('reports:update', reports);
+        }
+    }
+    });
 
 });
 
