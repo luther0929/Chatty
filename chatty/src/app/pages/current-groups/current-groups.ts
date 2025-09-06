@@ -66,4 +66,10 @@ export class CurrentGroups {
     return null;
   }
 
+  leaveGroup(groupId: string) {
+    const user = this.userService.getCurrentUser();
+    if (!user) return;
+    this.groupService.leaveGroup(groupId, user.username);
+  }
+
 }

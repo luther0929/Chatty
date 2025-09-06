@@ -54,6 +54,9 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "historyApiFallback": true
+          },
           "configurations": {
             "production": {
               "buildTarget": "chatty:build:production"

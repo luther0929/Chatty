@@ -17,6 +17,11 @@ const io = require('socket.io')(server, options);
 let groups = [];
 
 io.on('connection', (socket) => {
+
+    socket.on('groups:getAll', () => {
+        socket.emit('groups:update', groups);
+    });
+
     socket.on('newmsg', (message) => {
         io.emit('newmsg', message);
     })
@@ -94,20 +99,38 @@ io.on('connection', (socket) => {
     const group = groups.find(g => g.id === groupId);
     if (group) {
         if (group.admins.includes(performedBy) || role === 'superAdmin') {
+        // ✅ Remove from group members
         group.members = group.members.filter(m => m !== username);
+
+        // ✅ Also remove from all channels of this group
+        if (group.channels) {
+            group.channels.forEach(channel => {
+            channel.users = channel.users.filter(u => u !== username);
+            });
+        }
+
         io.emit('groups:update', groups);
         }
     }
     });
 
+
     socket.on('groups:ban', ({ groupId, username, performedBy, role }) => {
     const group = groups.find(g => g.id === groupId);
     if (group) {
         if (group.admins.includes(performedBy) || role === 'superAdmin') {
+        // ✅ Remove from group members
         group.members = group.members.filter(m => m !== username);
 
-        group.bannedMembers = group.bannedMembers || [];
+        // ✅ Also remove from all channels of this group
+        if (group.channels) {
+            group.channels.forEach(channel => {
+            channel.users = channel.users.filter(u => u !== username);
+            });
+        }
 
+        // ✅ Add to banned list
+        group.bannedMembers = group.bannedMembers || [];
         if (!group.bannedMembers.includes(username)) {
             group.bannedMembers.push(username);
         }
@@ -116,6 +139,7 @@ io.on('connection', (socket) => {
         }
     }
     });
+
 
     socket.on('channels:create', ({ groupId, channel, performedBy, role }) => {
     const group = groups.find(g => g.id === groupId);
@@ -163,6 +187,40 @@ io.on('connection', (socket) => {
         // Send reports to super admins only
         io.emit('reports:update', reports);
         }
+    }
+    });
+
+    socket.on('channels:join', ({ groupId, channelId, username }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        const channel = group.channels.find(c => c.id === channelId);
+        if (channel) {
+        if (group.members.includes(username) || group.admins.includes(username)) {
+            if (!channel.users.includes(username)) {
+            channel.users.push(username);
+            }
+            io.emit('groups:update', groups);
+        } else {
+            socket.emit('channels:joinFailed', { groupId, channelId, reason: 'not-group-member' });
+        }
+        }
+    }
+    });
+
+    socket.on('groups:leave', ({ groupId, username }) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+        // Remove from group members
+        group.members = group.members.filter(m => m !== username);
+
+        // Also remove from channels
+        if (group.channels) {
+        group.channels.forEach(channel => {
+            channel.users = channel.users.filter(u => u !== username);
+        });
+        }
+
+        io.emit('groups:update', groups);
     }
     });
 

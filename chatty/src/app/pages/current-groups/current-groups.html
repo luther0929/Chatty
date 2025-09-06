@@ -8,9 +8,14 @@
 <ul>
   @for(g of myGroups; track $index) {
     <li>
-      <strong>{{ g.name }}</strong>
+      <a [routerLink]="['/chat', g.id]">{{ g.name }}</a>
       <p>Admins: {{ g.admins.join(', ') }}</p>
       <p>Members: {{ g.members.join(', ') }}</p>
+
+      <!-- ✅ Show leave button if current user is a member -->
+      @if(g.members.includes(currentUser?.username || '')) {
+        <button (click)="leaveGroup(g.id)">Leave Group</button>
+      }
     </li>
   }
 </ul>

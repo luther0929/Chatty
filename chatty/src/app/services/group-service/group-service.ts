@@ -12,6 +12,11 @@ export class GroupService {
     this.sockets.listenForGroups((groups) => {
       this.groups.set(groups);
     });
+    this.sockets.emit('groups:getAll')
+  }
+
+  initialize() {
+    this.sockets.emit('groups:getAll'); // ask server for full state
   }
 
   createGroup(name: string, createdBy: string, admins: string[], members: string[]) {
@@ -67,6 +72,14 @@ export class GroupService {
 
   listenForReports(callback: (reports: Report[]) => void) {
     this.socket.on('reports:update', callback);
+  }
+
+  joinChannel(groupId: string, channelId: string, username: string) {
+    this.socket.emit('channels:join', { groupId, channelId, username });
+  }
+
+  leaveGroup(groupId: string, username: string) {
+    this.sockets.emit('groups:leave', { groupId, username });
   }
 
 }

@@ -1,10 +1,16 @@
-<label for="messageout">New Message</label>
-<input type="text" [ngModel]="messageout()" (ngModelChange)="messageout.set($event)" name="messageout" id="messageout"/>
-<button (click)="send()">Submit</button>
+<button (click)="goBack()">← Back to Groups</button>
 
-<h3>Messages</h3>
-<ul>
-  @for(message of messagein(); track $index){
-    <li>{{message}}</li>
-  }
-</ul>
+<h2>{{ group()?.name }}</h2>
+
+@if(group()) {
+  <h3>Channels</h3>
+  <ul>
+    @for(c of group()?.channels; track $index) {
+      <li>
+        {{ c.name }} ({{ c.users.length }} members)
+      </li>
+    }
+  </ul>
+} @else {
+  <p>Group not found.</p>
+}

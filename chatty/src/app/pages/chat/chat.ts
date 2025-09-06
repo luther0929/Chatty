@@ -1,29 +1,36 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, computed } from '@angular/core';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { GroupService } from '../../services/group-service/group-service';
 import { FormsModule } from '@angular/forms';
-import { Sockets } from '../../services/sockets/sockets';
+import { CommonModule } from '@angular/common';
 
 @Component({
-  selector: 'app-root',
-  imports: [FormsModule],
+  selector: 'app-chat',
+  standalone: true,
+  imports: [FormsModule, RouterModule, CommonModule],
   templateUrl: './chat.html',
   styleUrl: './chat.css'
 })
 export class Chat implements OnInit {
-  private socketService = inject(Sockets);
-  protected readonly title = signal('chatty');
-  messageout = signal('');
-  messagein = signal<string[]>([]);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private groupService = inject(GroupService);
+
+  groupId: string | null = null;
+
+  // ✅ Computed so it always reflects latest groups
+  group = computed(() => {
+    if (!this.groupId) return null;
+    return this.groupService.groups().find(g => g.id === this.groupId) || null;
+  });
 
   ngOnInit() {
-    this.socketService.onMessage().subscribe(
-      (msg: string) => {
-        this.messagein.update((msgs) => [...msgs, msg])
-      }
-    );
+    this.route.paramMap.subscribe(params => {
+      this.groupId = params.get('groupId');
+    });
   }
 
-  send() {
-    this.socketService.sendMessage(this.messageout())
-    this.messageout.set('');
+  goBack() {
+    this.router.navigate(['/current-groups']);
   }
 }
