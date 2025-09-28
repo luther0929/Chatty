@@ -464,6 +464,7 @@ io.on('connection', (socket) => {
                 { id: groupId, "channels.id": channelId },
                 { $push: { "channels.$.messages": msg } }
             );
+            console.log("✅ Message stored", result);
 
             io.to(`${groupId}:${channelId}`).emit('channels:message', msg);
 

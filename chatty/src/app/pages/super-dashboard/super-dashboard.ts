@@ -1,10 +1,11 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GroupService } from '../../services/group-service/group-service';
 import { UserService } from '../../services/user-service/user-service';
 import { Report } from '../../models/report';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
+import { User } from '../../models/user';
 
 @Component({
   selector: 'app-super-dashboard',
@@ -12,18 +13,29 @@ import { Router } from '@angular/router';
   templateUrl: './super-dashboard.html',
   styleUrl: './super-dashboard.css'
 })
-export class SuperDashboard {
+export class SuperDashboard implements OnInit{
   private groupService = inject(GroupService);
   private userService = inject(UserService);
   private router = inject(Router);
-
+  superAdmins: string[] = [];
   groupName = signal('');
   reports = signal<Report[]>([]);
 
   constructor() {
-    this.groupService.listenForReports((reports) => {
-    this.reports.set(reports as unknown as Report[]);
-  });
+      this.groupService.listenForReports((reports) => {
+        this.reports.set(reports as unknown as Report[]);
+      });
+  }
+
+  async ngOnInit() {
+    try {
+      const users: User[] = await this.userService.getAllUsers();  // ✅ await Promise
+      this.superAdmins = users
+        .filter((u: User) => u.roles.includes('superAdmin'))
+        .map((u: User) => u.username);
+    } catch (err) {
+      console.error('❌ Failed to load users', err);
+    }
   }
 
   get groups() {
@@ -54,13 +66,6 @@ export class SuperDashboard {
 
   promoteUser(groupId: string, username: string, role: string) {
     this.groupService.promoteUser(username, role, groupId);
-  }
-
-  get superAdmins(): string[] {
-    return this.userService
-      .getAllUsers()
-      .filter(u => u.roles.includes('superAdmin'))
-      .map(u => u.username);
   }
 
   removeMember(groupId: string, username: string) {
