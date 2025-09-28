@@ -1,9 +1,10 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { UserService} from '../../services/user-service/user-service';
 import { User } from '../../models/user';
 import { GroupService } from '../../services/group-service/group-service';
 import { Group as GroupModel } from '../../models/group';
+import { ApiService } from '../../services/api-service/api-service';
 
 @Component({
   selector: 'app-current-groups',
@@ -12,11 +13,21 @@ import { Group as GroupModel } from '../../models/group';
   templateUrl: './current-groups.html',
   styleUrl: './current-groups.css'
 })
-export class CurrentGroups {
+export class CurrentGroups implements OnInit{
   private userService = inject(UserService);
   private groupService = inject(GroupService);
-
+  groups: any[] = [];
   user = signal<User | null>(this.userService.getCurrentUser());
+
+  constructor(private api: ApiService) {}
+
+  ngOnInit() {
+    // Load once via REST API
+    this.api.getGroups().subscribe((groups) => {
+      console.log("Loaded via REST:", groups);
+      this.groups = groups;
+    });
+  }
 
   get currentUser() {
     return this.userService.getCurrentUser();

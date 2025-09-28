@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { GroupService } from '../group-service/group-service';
+import { HttpClient } from '@angular/common/http';
 import { User } from '../../models/user';
 import { Sockets } from '../sockets/sockets';
 
@@ -87,8 +88,9 @@ export class UserService {
   private sockets = inject(Sockets)
   private groupService = inject(GroupService);
   private currentUser: User | null = null;
+  private apiUrl = 'http://localhost:3000/api/users';
 
-  constructor(private router: Router) {
+  constructor(private router: Router, private http: HttpClient) {
     const sockets = inject(Sockets);
 
     sockets.on<{ username: string; role: string }>('users:roleUpdate', (data) => {
@@ -103,25 +105,24 @@ export class UserService {
   }
 
 
-  login(username: string, password: string): boolean {
-    const user = USERS.find(
-      u => u.username === username && u.password === password
-    );
-    if (user) {
-      this.currentUser = user;
-      sessionStorage.setItem('currentUser', JSON.stringify(user));
-      this.sockets.emit('users:sync', this.getCurrentUser());
-      return true;
+  async login(username: string, password: string): Promise<boolean> {
+    try {
+      const user = await this.http.post<User>(`${this.apiUrl}/login`, { username, password }).toPromise();
+      if (user) {
+        this.currentUser = user;
+        sessionStorage.setItem('currentUser', JSON.stringify(user));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Login failed", err);
+      return false;
     }
-    return false;
   }
 
   logout() {
     this.currentUser = null;
-    localStorage.removeItem('currentUser');
-    sessionStorage.removeItem('currentUser');
-    localStorage.clear();                // extra safety
-    sessionStorage.clear();              // clear session if used
+    sessionStorage.clear();
     this.router.navigate(['/login']);
   }
 
@@ -139,26 +140,21 @@ export class UserService {
     return [...USERS];  // return a copy of the hardcoded USERS array
   }
 
-  register(username: string, password: string): boolean {
-    // check uniqueness
-    const existing = USERS.find(u => u.username === username);
-    if (existing) return false;
-
-    const newUser: User = {
-      id: (USERS.length + 1).toString(),
-      username,
-      email: `${username}@example.com`, // optional stub
-      password,
-      roles: ['chatUser'], // default role
-      groups: []
-    };
-
-    USERS.push(newUser);
-    this.currentUser = newUser;
-    sessionStorage.setItem('currentUser', JSON.stringify(newUser));
-    this.sockets.emit('users:sync', this.getCurrentUser());
-    return true;
+  async register(username: string, password: string, email?: string): Promise<boolean> {
+    try {
+      const user = await this.http.post<User>(`${this.apiUrl}/register`, { username, email, password }).toPromise();
+      if (user) {
+        this.currentUser = user;
+        sessionStorage.setItem('currentUser', JSON.stringify(user));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Register failed", err);
+      return false;
+    }
   }
+
 
   deleteCurrentUser() {
     const user = this.getCurrentUser();

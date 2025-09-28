@@ -6,7 +6,7 @@ import { UserService } from '../../services/user-service/user-service';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule],   // ✅ add NgIf here
+  imports: [FormsModule],  
   templateUrl: './login.html',
   styleUrl: './login.css'
 })
@@ -22,15 +22,17 @@ export class Login {
     this.isSignUpMode = !this.isSignUpMode;
   }
 
-  onSubmit() {
+  async onSubmit() {
     if (this.isSignUpMode) {
-      if (this.userService.register(this.username, this.password)) {
+      const success = await this.userService.register(this.username, this.password);
+      if (success) {
         this.router.navigate(['/current-groups']);
       } else {
         alert('Username already exists');
       }
     } else {
-      if (this.userService.login(this.username, this.password)) {
+      const success = await this.userService.login(this.username, this.password);
+      if (success) {
         this.router.navigate(['/current-groups']);
       } else {
         alert('Invalid credentials');

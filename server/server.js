@@ -32,8 +32,103 @@ const options = {cors:{
     methods: ["GET", "POST"],
 }}
 const io = require('socket.io')(server, options);
-// let users = [];
-// let groups = [];
+
+// REST API routes
+
+// Get all groups
+app.get('/api/groups', async (req, res) => {
+  try {
+    const groups = await groupsCollection.find().toArray();
+    res.json(groups);
+  } catch (err) {
+    console.error("❌ GET /api/groups failed", err);
+    res.status(500).json({ error: "Failed to fetch groups" });
+  }
+});
+
+// Get single group by ID
+app.get('/api/groups/:id', async (req, res) => {
+  try {
+    const group = await groupsCollection.findOne({ id: req.params.id });
+    if (!group) return res.status(404).json({ error: "Group not found" });
+    res.json(group);
+  } catch (err) {
+    console.error("❌ GET /api/groups/:id failed", err);
+    res.status(500).json({ error: "Failed to fetch group" });
+  }
+});
+
+// Get all users
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await usersCollection.find().toArray();
+    res.json(users);
+  } catch (err) {
+    console.error("❌ GET /api/users failed", err);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// Get all messages for a group channel
+app.get('/api/groups/:groupId/channels/:channelId/messages', async (req, res) => {
+  try {
+    const { groupId, channelId } = req.params;
+    const group = await groupsCollection.findOne({ id: groupId });
+    if (!group) return res.status(404).json({ error: "Group not found" });
+
+    const channel = group.channels.find(c => c.id === channelId);
+    if (!channel) return res.status(404).json({ error: "Channel not found" });
+
+    res.json(channel.messages || []);
+  } catch (err) {
+    console.error("❌ GET /api/groups/:groupId/channels/:channelId/messages failed", err);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
+});
+
+// Register new user
+app.post('/api/users/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+
+    // check uniqueness
+    const existing = await usersCollection.findOne({ username });
+    if (existing) {
+      return res.status(400).json({ error: "Username already exists" });
+    }
+
+    const newUser = {
+      id: crypto.randomUUID(),
+      username,
+      email,
+      password,
+      roles: ["chatUser"], // default role
+      groups: []
+    };
+
+    await usersCollection.insertOne(newUser);
+    res.status(201).json(newUser);
+  } catch (err) {
+    console.error("❌ register failed", err);
+    res.status(500).json({ error: "Failed to register user" });
+  }
+});
+
+// Login
+app.post('/api/users/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await usersCollection.findOne({ username, password });
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    res.json(user);
+  } catch (err) {
+    console.error("❌ login failed", err);
+    res.status(500).json({ error: "Failed to login" });
+  }
+});
+
 
 io.on('connection', (socket) => {
 
