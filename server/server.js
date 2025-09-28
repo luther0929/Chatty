@@ -396,29 +396,34 @@ io.on('connection', (socket) => {
     });
 
 
-    // 👥 Join channel
-    socket.on('channels:join', async ({ groupId, channelId, username }) => {
+   socket.on('channels:join', async ({ groupId, channelId, username }) => {
         try {
-            await groupsCollection.updateOne(
-                { id: groupId, "channels.id": channelId },
-                { $addToSet: { "channels.$.users": username } }
-            );
+            // leave previous channel if exists
+            if (socket.currentChannel) {
+                socket.leave(socket.currentChannel);
+            }
 
-            socket.currentChannel = `${groupId}:${channelId}`;
-            socket.join(socket.currentChannel);
+            const room = `${groupId}:${channelId}`;
+            socket.currentChannel = room;
+            socket.join(room);
 
-            const allGroups = await groupsCollection.find().toArray();
-            io.emit('groups:update', allGroups);
+            console.log(`✅ ${username} joined channel ${room}`);
 
-            io.to(socket.currentChannel).emit('channels:system', {
+            // confirm join back to client
+            socket.emit('channels:joined', { groupId, channelId });
+
+            // system message to others
+            io.to(room).emit('channels:system', {
                 username: 'System',
                 text: `${username} joined the channel`,
                 timestamp: new Date(),
             });
+
         } catch (err) {
             console.error("❌ channels:join failed", err);
         }
     });
+
 
     // 🚪 Leave group
     socket.on('groups:leave', async ({ groupId, username }) => {
@@ -457,23 +462,25 @@ io.on('connection', (socket) => {
 
     // 💬 Send message
     socket.on('channels:message', async ({ groupId, channelId, username, text }) => {
-        try {
-            const msg = { username, text, timestamp: new Date() };
+    try {
+        const msg = { username, text, timestamp: new Date() };
 
-            await groupsCollection.updateOne(
-                { id: groupId, "channels.id": channelId },
-                { $push: { "channels.$.messages": msg } }
-            );
-            console.log("✅ Message stored", result);
+        // push to DB
+        await groupsCollection.updateOne(
+            { id: groupId, "channels.id": channelId },
+            { $push: { "channels.$.messages": msg } }
+        );
 
-            io.to(`${groupId}:${channelId}`).emit('channels:message', msg);
+        console.log(`💬 Message from ${username} in ${groupId}:${channelId}`);
 
-            const allGroups = await groupsCollection.find().toArray();
-            io.emit('groups:update', allGroups);
-        } catch (err) {
-            console.error("❌ channels:message failed", err);
-        }
+        // broadcast to everyone in the room
+        io.to(`${groupId}:${channelId}`).emit('channels:message', msg);
+
+    } catch (err) {
+        console.error("❌ channels:message failed", err);
+    }
     });
+
 
     // 📜 Get messages
     socket.on('channels:getMessages', async ({ groupId, channelId }) => {
