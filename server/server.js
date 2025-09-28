@@ -2,10 +2,12 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const crypto = require("crypto");
 const app = express();
 const PORT = 3000;
 
 app.use(cors());
+app.use(express.json());
 const { MongoClient } = require('mongodb');
 const uri = "mongodb://127.0.0.1:27017";
 const client = new MongoClient(uri);
@@ -18,6 +20,7 @@ async function connectDB() {
     usersCollection = db.collection("users");
     groupsCollection = db.collection("groups");
     messagesCollection = db.collection("messages");
+    await ensureSuperUser();
 
     console.log("✅ Connected to MongoDB");
   } catch (err) {
@@ -129,6 +132,23 @@ app.post('/api/users/login', async (req, res) => {
   }
 });
 
+// Ensure a default super user exists
+async function ensureSuperUser() {
+  const superUser = await usersCollection.findOne({ username: "super" });
+  if (!superUser) {
+    await usersCollection.insertOne({
+      id: crypto.randomUUID(),
+      username: "super",
+      email: "super@example.com",
+      password: "123",   // 🔑 login with this password
+      roles: ["superAdmin"],
+      groups: []
+    });
+    console.log("✅ Default super user created: username=super, password=123");
+  } else {
+    console.log("ℹ️ Super user already exists");
+  }
+}
 
 io.on('connection', (socket) => {
 

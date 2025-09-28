@@ -4,82 +4,7 @@ import { GroupService } from '../group-service/group-service';
 import { HttpClient } from '@angular/common/http';
 import { User } from '../../models/user';
 import { Sockets } from '../sockets/sockets';
-
-const USERS: User[] = [
-  {
-    id: '1',
-    username: 'super',
-    email: 'super@example.com',
-    password: '123',
-    roles: ['superAdmin'],
-    groups: []
-  },
-  {
-    id: '2',
-    username: 'alice',
-    email: 'alice@example.com',
-    password: '123',
-    roles: ['chatUser'],
-    groups: []
-  },
-  {
-    id: '3',
-    username: 'bob',
-    email: 'bob@example.com',
-    password: '123',
-    roles: ['chatUser', 'groupAdmin'],
-    groups: []
-  },
-  {
-    id: '4',
-    username: 'charlie',
-    email: 'charlie@example.com',
-    password: '123',
-    roles: ['chatUser'],
-    groups: []
-  },
-  {
-    id: '5',
-    username: 'john',
-    email: 'john@example.com',
-    password: '123',
-    roles: ['chatUser', 'groupAdmin'],
-    groups: []
-  },
-  {
-    id: '6',
-    username: 'luther',
-    email: 'luther@example.com',
-    password: '123',
-    roles: ['chatUser', 'groupAdmin'],
-    groups: []
-  },
-  {
-    id: '7',
-    username: 'ben',
-    email: 'ben@example.com',
-    password: '123',
-    roles: ['chatUser'],
-    groups: []
-  },
-  {
-    id: '8',
-    username: 'jane',
-    email: 'jane@example.com',
-    password: '123',
-    roles: ['chatUser'],
-    groups: []
-  },
-  {
-    id: '8',
-    username: 'groupAdmin',
-    email: 'groupAdmin@example.com',
-    password: '123',
-    roles: ['chatUser'],
-    groups: []
-  },
-];
-
+import { lastValueFrom } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -136,8 +61,8 @@ export class UserService {
     return this.currentUser !== null;
   }
 
-  getAllUsers(): User[] {
-    return [...USERS];  // return a copy of the hardcoded USERS array
+  async getAllUsers(): Promise<User[]> {
+    return await lastValueFrom(this.http.get<User[]>(this.apiUrl));
   }
 
   async register(username: string, password: string, email?: string): Promise<boolean> {
@@ -155,24 +80,12 @@ export class UserService {
     }
   }
 
-
-  deleteCurrentUser() {
+  async deleteCurrentUser() {
     const user = this.getCurrentUser();
     if (!user) return;
 
-    // Remove from USERS array
-    const index = USERS.findIndex(u => u.username === user.username);
-    if (index !== -1) {
-      USERS.splice(index, 1);
-    }
-
-    // Tell backend to clean up group memberships
+    await this.http.delete(`${this.apiUrl}/${user.username}`).toPromise();
     this.sockets.emit('users:delete', user.username);
-
-    // Clear state + storage
     this.logout();
   }
-
-  
-
 }
