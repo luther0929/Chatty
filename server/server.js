@@ -29,6 +29,18 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// For chat message images
+const messageStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, 'uploads/messages'));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const uploadMessageImg = multer({ storage: messageStorage });
+
 async function connectDB() {
   try {
     await client.connect();
@@ -548,9 +560,9 @@ io.on('connection', (socket) => {
 
 
     // 💬 Send message
-    socket.on('channels:message', async ({ groupId, channelId, username, text, avatar }) => {
+    socket.on('channels:message', async ({ groupId, channelId, username, text, avatar, image }) => {
         try {
-            const msg = { username, text, avatar, timestamp: new Date() };
+            const msg = { username, text, avatar, image, timestamp: new Date() };
 
             // push to DB
             await groupsCollection.updateOne(
@@ -663,6 +675,13 @@ io.on('connection', (socket) => {
         } catch (err) {
             console.error("❌ users:delete failed", err);
         }
+    });
+
+    app.post('/api/messages/upload', uploadMessageImg.single('image'), (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: "No file uploaded" });
+        }
+        res.json({ imageUrl: `/uploads/messages/${req.file.filename}` });
     });
 });
 

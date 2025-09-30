@@ -19,6 +19,8 @@ export class Chat implements OnInit {
   private userService = inject(UserService);
 
   groupId: string | null = null;
+  selectedImage: File | null = null;
+  selectedImagePreview: string | null = null;
   messageText = signal('');
 
   initialOf(name?: string): string {
@@ -27,6 +29,29 @@ export class Chat implements OnInit {
   }
 
   gradientCSS = 'linear-gradient(90deg, #6237A0, #9754CB)';
+
+  onImageSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.selectedImage = input.files[0];
+
+      // Generate preview URL
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.selectedImagePreview = reader.result as string;
+      };
+      reader.readAsDataURL(this.selectedImage);
+    }
+  }
+
+  removeSelectedImage() {
+    this.selectedImage = null;
+    this.selectedImagePreview = null;
+
+    // Reset the file input so same image can be selected again
+    const input = document.querySelector<HTMLInputElement>('#chat-image-input');
+    if (input) input.value = '';
+  }
 
   channelUsers = computed(() => {
     const cc = this.currentChannel();        // triggers on channel change
@@ -58,7 +83,6 @@ export class Chat implements OnInit {
     return this.userService.getCurrentUser();
   }
 
-
   joinChannel(channelId: string, channelName: string) {
     const user = this.userService.getCurrentUser();
     if (this.groupId && user) {
@@ -67,12 +91,30 @@ export class Chat implements OnInit {
   }
 
 
-  sendMessage() {
+  async sendMessage() {
     const text = this.messageText().trim();
     const user = this.userService.getCurrentUser();
     const channel = this.currentChannel();
-    if (text && user && channel) {
-      this.groupService.sendMessage(channel.groupId, channel.channelId, user.username, text, user.avatar);
+
+    if (!user || !channel) return;
+
+    let imageUrl: string | undefined;
+
+    if (this.selectedImage) {
+      const formData = new FormData();
+      formData.append('image', this.selectedImage);
+
+      const response: any = await fetch('http://localhost:3000/api/messages/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json();
+      imageUrl = result.imageUrl;
+      this.selectedImage = null; // reset
+    }
+
+    if (text || imageUrl) {
+      this.groupService.sendMessage(channel.groupId, channel.channelId, user.username, text, user.avatar, imageUrl);
       this.messageText.set('');
     }
   }
