@@ -57,14 +57,12 @@
                     <div class="d-flex align-items-start gap-2 mb-3">
                       <!-- Avatar -->
                       <img
-                        [src]="m && m.avatar 
-                          ? 'http://localhost:3000' + m.avatar 
-                          : 'http://localhost:3000/uploads/avatars/avatar-placeholder.png'"
-
-                        alt="avatar"
+                        [src]="getAvatarUrl(m.username, m.avatar)"
+                        alt="Avatar"
                         class="rounded-circle me-3"
                         style="width: 64px; height: 64px; object-fit: cover;"
                       >
+
 
                       <!-- Message bubble -->
                       <div class="flex-grow-1">

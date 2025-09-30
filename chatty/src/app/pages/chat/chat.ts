@@ -77,8 +77,15 @@ export class Chat implements OnInit {
     }
   }
 
-
   goBack() {
     this.router.navigate(['/current-groups']);
+  }
+
+  getAvatarUrl(username: string, avatarPath?: string): string {
+    if (avatarPath) {
+      return 'http://localhost:3000' + avatarPath;
+    }
+    // ✅ Consistent fallback with server
+    return 'http://localhost:3000/uploads/avatars/avatar-placeholder.png';
   }
 }
