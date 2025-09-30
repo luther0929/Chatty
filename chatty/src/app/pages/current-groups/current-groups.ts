@@ -92,4 +92,31 @@ export class CurrentGroups implements OnInit{
     }
   }
 
+  async onAvatarSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    const currentUser = this.userService.getCurrentUser();
+
+    if (currentUser) {
+      const updated = await this.userService.uploadAvatar(currentUser.username, file);
+      if (updated) {
+        // ✅ Add cache busting here too
+        updated.avatar = updated.avatar + '?t=' + Date.now();
+
+        this.user.set(updated); 
+        console.log("✅ Avatar updated immediately:", updated);
+      }
+    }
+  }
+
+  get avatarUrl(): string {
+    const user = this.user();
+    if (user && user.avatar) {
+      return 'http://localhost:3000' + user.avatar + '?t=' + Date.now();
+    }
+    return 'assets/avatar-placeholder.png';
+  }
+
 }

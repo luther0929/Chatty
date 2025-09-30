@@ -72,7 +72,7 @@ export class Chat implements OnInit {
     const user = this.userService.getCurrentUser();
     const channel = this.currentChannel();
     if (text && user && channel) {
-      this.groupService.sendMessage(channel.groupId, channel.channelId, user.username, text);
+      this.groupService.sendMessage(channel.groupId, channel.channelId, user.username, text, user.avatar);
       this.messageText.set('');
     }
   }

@@ -111,8 +111,8 @@ export class GroupService {
   }
 
   /** --------- MESSAGING --------- */
-  sendMessage(groupId: string, channelId: string, username: string, text: string) {
-    this.socket.emit('channels:message', { groupId, channelId, username, text });
+  sendMessage(groupId: string, channelId: string, username: string, text: string, avatar?: string) {
+    this.socket.emit('channels:message', { groupId, channelId, username, text, avatar });
   }
 
   private listenForMessages() {

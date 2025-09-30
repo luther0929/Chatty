@@ -88,4 +88,27 @@ export class UserService {
     this.sockets.emit('users:delete', user.username);
     this.logout();
   }
+
+  async uploadAvatar(username: string, file: File): Promise<User | null> {
+    const formData = new FormData();
+    formData.append('username', username);
+    formData.append('avatar', file);
+
+    try {
+      const updated = await this.http
+        .post<User>('http://localhost:3000/api/users/avatar', formData)
+        .toPromise();
+
+      if (updated !== undefined && updated !== null) {  // ✅ check both
+        this.currentUser = updated;
+        sessionStorage.setItem('currentUser', JSON.stringify(updated));
+        return updated;
+      } else {
+        return null;
+      }
+    } catch (err) {
+      console.error("Avatar upload failed", err);
+      return null;
+    }
+  }
 }

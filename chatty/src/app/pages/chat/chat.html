@@ -56,12 +56,15 @@
                   @for(m of messages(); track $index) {
                     <div class="d-flex align-items-start gap-2 mb-3">
                       <!-- Avatar -->
-                      <div
-                        class="d-inline-flex justify-content-center align-items-center flex-shrink-0"
-                        style="width:36px; height:36px; border-radius:50%;
-                              background: {{ gradientCSS }}; color:#fff; font-weight:700;">
-                        {{ initialOf(m.username || 'System') }}
-                      </div>
+                      <img
+                        [src]="m && m.avatar 
+                          ? 'http://localhost:3000' + m.avatar 
+                          : 'http://localhost:3000/uploads/avatars/avatar-placeholder.png'"
+
+                        alt="avatar"
+                        class="rounded-circle me-3"
+                        style="width: 64px; height: 64px; object-fit: cover;"
+                      >
 
                       <!-- Message bubble -->
                       <div class="flex-grow-1">

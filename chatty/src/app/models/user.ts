@@ -5,4 +5,5 @@ export interface User {
   password: string;
   roles: string[];
   groups: string[];
+  avatar?: string;
 }
