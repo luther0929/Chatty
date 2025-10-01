@@ -1,9 +1,10 @@
-import { Component, inject, OnInit, computed, signal } from '@angular/core';
+import { Component, inject, OnInit, computed, signal, ElementRef, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { GroupService } from '../../services/group-service/group-service';
 import { UserService } from '../../services/user-service/user-service';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { VideoService } from '../../services/video-service/video-service';
 
 @Component({
   selector: 'app-chat',
@@ -17,11 +18,16 @@ export class Chat implements OnInit {
   private router = inject(Router);
   private groupService = inject(GroupService);
   private userService = inject(UserService);
+  private videoService = inject(VideoService);
 
   groupId: string | null = null;
   selectedImage: File | null = null;
   selectedImagePreview: string | null = null;
   messageText = signal('');
+
+  @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
+  @ViewChild('remoteVideo') remoteVideo!: ElementRef<HTMLVideoElement>;
+  remotePeerId = '';
 
   initialOf(name?: string): string {
     const n = (name ?? '').trim();
@@ -77,6 +83,8 @@ export class Chat implements OnInit {
       this.groupId = params.get('groupId');
       this.groupService.initialize(); // ✅ fetch groups from server on refresh
     });
+
+    this.videoService.answerCall(this.localVideo.nativeElement, this.remoteVideo.nativeElement);
   }
 
   get currentUser() {
@@ -129,5 +137,13 @@ export class Chat implements OnInit {
     }
     // ✅ Consistent fallback with server
     return 'http://localhost:3000/uploads/avatars/avatar-placeholder.png';
+  }
+
+  call(remoteId: string) {
+    this.videoService.startCall(remoteId, this.localVideo.nativeElement, this.remoteVideo.nativeElement);
+  }
+
+  end() {
+    this.videoService.endCall();
   }
 }

@@ -64,6 +64,14 @@ const options = {cors:{
 }}
 const io = require('socket.io')(server, options);
 
+const { ExpressPeerServer } = require('peer');
+const peerServer = ExpressPeerServer(server, {
+  debug: true,
+  path: '/video'
+});
+
+app.use('/peerjs', peerServer);
+
 // REST API routes
 
 // Get all groups
