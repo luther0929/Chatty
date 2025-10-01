@@ -50,16 +50,16 @@
 
           <div class="video-grid d-flex flex-wrap gap-2 mt-3">
             <!-- Local video -->
-            <video #localVideo autoplay playsinline
-                  *ngIf="isCameraOn"
-                  class="border rounded"
-                  style="width: 200px; height: 150px;"></video>
+            <video #localVideo autoplay muted playsinline width="250"></video>
 
-            <!-- Remote streams -->
-            <div *ngFor="let v of remoteStreams">
-              <video [srcObject]="v" autoplay playsinline
-                    class="border rounded"
-                    style="width: 200px; height: 150px;"></video>
+            <!-- ✅ Remote videos container -->
+            <div id="remote-videos" class="remote-video-grid">
+              <video *ngFor="let stream of remoteStreams"
+                    [srcObject]="stream"
+                    autoplay
+                    playsinline
+                    width="200">
+              </video>
             </div>
           </div>
 
@@ -107,14 +107,14 @@
 
               <!-- Message Input -->
               <form (ngSubmit)="sendMessage()" class="d-flex mt-3">
-                <!-- Camera toggle button -->
-                <button type="button"
-                        (click)="toggleCamera()"
-                        class="btn btn-outline-secondary mb-0 p-2 d-flex align-items-center justify-content-center"
-                        style="height:38px; width:38px; border-radius:.5rem;">
-                  <span *ngIf="isCameraOn">📹</span>
-                  <span *ngIf="!isCameraOn">🚫</span>
-                </button>
+                  <!-- Camera toggle button -->
+                  <button type="button"
+                          (click)="toggleCamera()"
+                          class="btn btn-outline-secondary mb-0 p-2 d-flex align-items-center justify-content-center"
+                          style="height:38px; width:38px; border-radius:.5rem;">
+                    <span *ngIf="isCameraOn">📹</span>
+                    <span *ngIf="!isCameraOn">🚫</span>
+                  </button>
 
                 <label
                   class="btn btn-outline-secondary mb-0 p-2 d-flex align-items-center justify-content-center"

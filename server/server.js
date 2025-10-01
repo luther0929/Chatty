@@ -693,7 +693,7 @@ io.on('connection', (socket) => {
     socket.on('video:broadcast', ({ groupId, channelId, username, peerId }) => {
         const room = `${groupId}:${channelId}`;
         console.log(`🎥 ${username} broadcasting in ${room} with peer ${peerId}`);
-        io.to(room).emit('video:broadcast', { peerId, username });
+        io.to(room).emit('video:broadcast', { peerId, username, channelId, groupId });
     });
 
     app.post('/api/messages/upload', uploadMessageImg.single('image'), (req, res) => {

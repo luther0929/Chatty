@@ -26,7 +26,7 @@ export class Chat implements OnInit {
   messageText = signal('');
 
   @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
-  @ViewChild('remoteVideo') remoteVideo!: ElementRef<HTMLVideoElement>;
+
   remotePeerId = '';
   isCameraOn = false;
   remoteStreams: MediaStream[] = [];
@@ -86,14 +86,16 @@ export class Chat implements OnInit {
       this.groupService.initialize(); // ✅ fetch groups from server on refresh
     });
 
-    // listen for incoming remote streams
-    this.videoService.onRemoteStream((id, stream) => {
-      // replace existing or add new
-      const existingIndex = this.remoteStreams.findIndex(s => (s as any)._peerId === id);
+    // ✅ Register for new remote streams
+    this.videoService.onRemoteStream((peerId, stream) => {
+      const existingIndex = this.remoteStreams.findIndex(
+        (s: any) => s._peerId === peerId
+      );
+
       if (existingIndex >= 0) {
         this.remoteStreams[existingIndex] = stream;
       } else {
-        (stream as any)._peerId = id; // tag for tracking
+        (stream as any)._peerId = peerId; // tag stream with peerId
         this.remoteStreams = [...this.remoteStreams, stream];
       }
     });
@@ -152,6 +154,15 @@ export class Chat implements OnInit {
   }
 
   async toggleCamera() {
+    // always fetch current channel and user at start
+    const channel = this.currentChannel();
+    const user = this.currentUser;
+
+    if (!channel || !user) {
+      console.error("❌ No active channel or user found");
+      return;
+    }
+
     if (!this.isCameraOn) {
       this.isCameraOn = true;
 
@@ -162,14 +173,14 @@ export class Chat implements OnInit {
       await this.localVideo.nativeElement.play();
 
       // announce broadcast to channel
-      const channel = this.currentChannel();
-      const user = this.currentUser;
-      if (channel && user) {
-        this.videoService.startBroadcast(stream, channel.groupId, channel.channelId, user.username);
-      }
+      this.videoService.startBroadcast(stream, channel.channelId, user.username, channel.groupId);
+
     } else {
       this.isCameraOn = false;
-      this.videoService.stopBroadcast();
+
+      // stop broadcasting to channel
+      this.videoService.stopBroadcast(channel.channelId, user.username);
+
       this.localVideo.nativeElement.srcObject = null;
     }
   }
