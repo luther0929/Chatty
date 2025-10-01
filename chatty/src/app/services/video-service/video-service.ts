@@ -9,42 +9,65 @@ export class VideoService {
   private currentStream: MediaStream | null = null;
   private connections: MediaConnection[] = [];
   private remoteHandler: ((s: MediaStream) => void) | null = null;
+  private createEmptyStream(): MediaStream {
+    return new MediaStream(); // no tracks
+  }
+  private remoteStreams: Map<string, MediaStream> = new Map();
 
   constructor() {
-    this.peer = new Peer({ host: 'localhost', port: 3000, path: '/peerjs' });
+    this.peer = new Peer({
+      host: 'localhost',
+      port: 3000,
+      path: '/peerjs'
+    });
 
+    // PeerJS open event
     this.peer.on('open', (id) => {
       console.log('✅ PeerJS connected with ID:', id);
 
-      // listen for broadcast join requests
+      // Listen for broadcast announcements from others
       this.sockets.on<any>('video:broadcast', ({ peerId, username }) => {
         if (peerId !== this.peer.id) {
-          const call = this.peer.call(peerId, this.currentStream!);
+          console.log(`📡 Connecting to ${username} (${peerId})`);
+
+          const streamToSend = this.currentStream ? this.currentStream : this.createEmptyStream();
+          const call = this.peer.call(peerId, streamToSend);
+
           call.on('stream', (remoteStream) => {
+            console.log('🎥 Received stream from', username);
             if (this.remoteHandler) this.remoteHandler(remoteStream);
           });
+
           this.connections.push(call);
         }
       });
+
     });
 
+    // When someone calls us
     this.peer.on('call', (call) => {
-      call.answer(); // viewer doesn’t need to send media back
+      const streamToSend = this.currentStream ? this.currentStream : new MediaStream();
+      call.answer(streamToSend);
       call.on('stream', (remoteStream) => {
+        console.log('🎥 Got remote stream');
         if (this.remoteHandler) this.remoteHandler(remoteStream);
       });
       this.connections.push(call);
     });
   }
 
-  startBroadcast(stream: MediaStream, groupId: string, channelId: string, username: string) {
-    this.currentStream = stream;
-    // notify channel members
+  /** Start broadcasting my stream */
+  async startBroadcast(localStream: MediaStream, groupId: string, channelId: string, username: string) {
+    this.currentStream = localStream;
     this.sockets.emit('video:broadcast', {
-      groupId, channelId, username, peerId: this.peer.id
+      groupId,
+      channelId,
+      username,
+      peerId: this.peer.id
     });
   }
 
+  /** Stop broadcasting & close connections */
   stopBroadcast() {
     this.currentStream?.getTracks().forEach(t => t.stop());
     this.currentStream = null;
@@ -52,7 +75,20 @@ export class VideoService {
     this.connections = [];
   }
 
-  onRemoteStream(handler: (s: MediaStream) => void) {
-    this.remoteHandler = handler;
+  /** Subscribe component to new remote streams */
+  onRemoteStream(handler: (id: string, stream: MediaStream) => void) {
+    this.peer.on('call', (call) => {
+      const streamToSend = this.currentStream ? this.currentStream : new MediaStream();
+      call.answer(streamToSend);
+
+      call.on('stream', (remoteStream) => {
+        this.remoteStreams.set(call.peer, remoteStream);
+        handler(call.peer, remoteStream);
+      });
+
+      call.on('close', () => {
+        this.remoteStreams.delete(call.peer);
+      });
+    });
   }
 }

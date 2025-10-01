@@ -12,7 +12,12 @@ export class Sockets {
   private apiserver = 'http://localhost:3000';
 
   constructor() {
-    this.socket = io(this.apiserver);
+    this.socket = io(this.apiserver, {
+      transports: ['polling'],  // ✅ Force polling only, no WebSocket upgrade
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
   }
 
   emit(event: string, payload?: any) {

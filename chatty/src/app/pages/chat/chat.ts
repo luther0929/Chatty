@@ -87,8 +87,15 @@ export class Chat implements OnInit {
     });
 
     // listen for incoming remote streams
-    this.videoService.onRemoteStream((stream) => {
-      this.remoteStreams = [...this.remoteStreams, stream];
+    this.videoService.onRemoteStream((id, stream) => {
+      // replace existing or add new
+      const existingIndex = this.remoteStreams.findIndex(s => (s as any)._peerId === id);
+      if (existingIndex >= 0) {
+        this.remoteStreams[existingIndex] = stream;
+      } else {
+        (stream as any)._peerId = id; // tag for tracking
+        this.remoteStreams = [...this.remoteStreams, stream];
+      }
     });
   }
 
@@ -154,7 +161,7 @@ export class Chat implements OnInit {
       this.localVideo.nativeElement.muted = true;
       await this.localVideo.nativeElement.play();
 
-      // announce to channel that you are streaming
+      // announce broadcast to channel
       const channel = this.currentChannel();
       const user = this.currentUser;
       if (channel && user) {

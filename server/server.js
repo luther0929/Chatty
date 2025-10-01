@@ -6,7 +6,6 @@ const crypto = require("crypto");
 const app = express();
 const PORT = 3000;
 
-
 app.use(cors());
 app.use(express.json());
 const { MongoClient } = require('mongodb');
@@ -58,16 +57,22 @@ async function connectDB() {
 }
 
 const server = http.createServer(app);
-const options = {cors:{
-    origin: "*",
+
+const io = require('socket.io')(server, {
+  cors: {
+    origin: "http://localhost:4200",
     methods: ["GET", "POST"],
-}}
-const io = require('socket.io')(server, options);
+    credentials: true
+  },
+  transports: ['polling'],  // ✅ Server also uses polling only
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
 
 const { ExpressPeerServer } = require('peer');
 const peerServer = ExpressPeerServer(server, {
   debug: true,
-  path: '/video'
+  path: '/'
 });
 
 app.use('/peerjs', peerServer);
@@ -703,4 +708,5 @@ io.on('connection', (socket) => {
 server.listen(PORT, async () => {
   await connectDB();
   console.log(`Server running on port ${PORT}`);
+  console.log(`✅ PeerJS available at http://localhost:${PORT}/peerjs`);
 });
