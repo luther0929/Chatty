@@ -28,6 +28,8 @@ export class Chat implements OnInit {
   @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
   @ViewChild('remoteVideo') remoteVideo!: ElementRef<HTMLVideoElement>;
   remotePeerId = '';
+  isCameraOn = false;
+  remoteStreams: MediaStream[] = [];
 
   initialOf(name?: string): string {
     const n = (name ?? '').trim();
@@ -84,7 +86,10 @@ export class Chat implements OnInit {
       this.groupService.initialize(); // ✅ fetch groups from server on refresh
     });
 
-    this.videoService.answerCall(this.localVideo.nativeElement, this.remoteVideo.nativeElement);
+    // listen for incoming remote streams
+    this.videoService.onRemoteStream((stream) => {
+      this.remoteStreams = [...this.remoteStreams, stream];
+    });
   }
 
   get currentUser() {
@@ -139,11 +144,26 @@ export class Chat implements OnInit {
     return 'http://localhost:3000/uploads/avatars/avatar-placeholder.png';
   }
 
-  call(remoteId: string) {
-    this.videoService.startCall(remoteId, this.localVideo.nativeElement, this.remoteVideo.nativeElement);
-  }
+  async toggleCamera() {
+    if (!this.isCameraOn) {
+      this.isCameraOn = true;
 
-  end() {
-    this.videoService.endCall();
+      // capture local stream
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      this.localVideo.nativeElement.srcObject = stream;
+      this.localVideo.nativeElement.muted = true;
+      await this.localVideo.nativeElement.play();
+
+      // announce to channel that you are streaming
+      const channel = this.currentChannel();
+      const user = this.currentUser;
+      if (channel && user) {
+        this.videoService.startBroadcast(stream, channel.groupId, channel.channelId, user.username);
+      }
+    } else {
+      this.isCameraOn = false;
+      this.videoService.stopBroadcast();
+      this.localVideo.nativeElement.srcObject = null;
+    }
   }
 }

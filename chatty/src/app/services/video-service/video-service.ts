@@ -1,61 +1,58 @@
 import { Injectable } from '@angular/core';
 import Peer, { MediaConnection } from 'peerjs';
+import { Sockets } from '../sockets/sockets';
 
 @Injectable({ providedIn: 'root' })
 export class VideoService {
   private peer: Peer;
-  private currentCall: MediaConnection | null = null;
+  private sockets = new Sockets();
+  private currentStream: MediaStream | null = null;
+  private connections: MediaConnection[] = [];
+  private remoteHandler: ((s: MediaStream) => void) | null = null;
 
   constructor() {
-    this.peer = new Peer({
-      host: 'localhost',
-      port: 3000,
-      path: '/peerjs'
-    });
+    this.peer = new Peer({ host: 'localhost', port: 3000, path: '/peerjs' });
 
     this.peer.on('open', (id) => {
       console.log('✅ PeerJS connected with ID:', id);
-    });
-  }
 
-  async startCall(remotePeerId: string, localVideo: HTMLVideoElement, remoteVideo: HTMLVideoElement) {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    localVideo.srcObject = stream;
-    localVideo.muted = true;
-    await localVideo.play();
-
-    const call = this.peer.call(remotePeerId, stream);
-
-    call.on('stream', (remoteStream) => {
-      remoteVideo.srcObject = remoteStream;
-      remoteVideo.play();
-    });
-
-    this.currentCall = call;
-  }
-
-  answerCall(localVideo: HTMLVideoElement, remoteVideo: HTMLVideoElement) {
-    this.peer.on('call', async (call) => {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localVideo.srcObject = stream;
-      localVideo.muted = true;
-      await localVideo.play();
-
-      call.answer(stream);
-
-      call.on('stream', (remoteStream) => {
-        remoteVideo.srcObject = remoteStream;
-        remoteVideo.play();
+      // listen for broadcast join requests
+      this.sockets.on<any>('video:broadcast', ({ peerId, username }) => {
+        if (peerId !== this.peer.id) {
+          const call = this.peer.call(peerId, this.currentStream!);
+          call.on('stream', (remoteStream) => {
+            if (this.remoteHandler) this.remoteHandler(remoteStream);
+          });
+          this.connections.push(call);
+        }
       });
+    });
 
-      this.currentCall = call;
+    this.peer.on('call', (call) => {
+      call.answer(); // viewer doesn’t need to send media back
+      call.on('stream', (remoteStream) => {
+        if (this.remoteHandler) this.remoteHandler(remoteStream);
+      });
+      this.connections.push(call);
     });
   }
 
-  endCall() {
-    if (this.currentCall) {
-      this.currentCall.close();
-      this.currentCall = null;
-    }
+  startBroadcast(stream: MediaStream, groupId: string, channelId: string, username: string) {
+    this.currentStream = stream;
+    // notify channel members
+    this.sockets.emit('video:broadcast', {
+      groupId, channelId, username, peerId: this.peer.id
+    });
+  }
+
+  stopBroadcast() {
+    this.currentStream?.getTracks().forEach(t => t.stop());
+    this.currentStream = null;
+    this.connections.forEach(c => c.close());
+    this.connections = [];
+  }
+
+  onRemoteStream(handler: (s: MediaStream) => void) {
+    this.remoteHandler = handler;
   }
 }

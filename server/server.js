@@ -685,12 +685,19 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('video:broadcast', ({ groupId, channelId, username, peerId }) => {
+        const room = `${groupId}:${channelId}`;
+        console.log(`🎥 ${username} broadcasting in ${room} with peer ${peerId}`);
+        io.to(room).emit('video:broadcast', { peerId, username });
+    });
+
     app.post('/api/messages/upload', uploadMessageImg.single('image'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: "No file uploaded" });
         }
         res.json({ imageUrl: `/uploads/messages/${req.file.filename}` });
     });
+    
 });
 
 server.listen(PORT, async () => {
