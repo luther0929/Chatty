@@ -21,6 +21,7 @@ export class Chat implements OnInit, OnDestroy {
   private userService = inject(UserService);
   private videoService = inject(VideoService);
   private sockets = inject(Sockets);
+  private cdr = inject(ChangeDetectorRef);
 
   groupId: string | null = null;
   selectedImage: File | null = null;
@@ -30,38 +31,12 @@ export class Chat implements OnInit, OnDestroy {
   @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
 
   isCameraOn = false;
-  remoteStreams = new Map<string, MediaStream>();
-  remoteStreamArray = signal<MediaStream[]>([]);
-
-  private cdr = inject(ChangeDetectorRef);
-
-  initialOf(name?: string): string {
-    const n = (name ?? '').trim();
-    return n ? n[0].toUpperCase() : '?';
-  }
+  
+  remotePeers = new Map<string, { username: string; stream: MediaStream | null; avatar?: string }>();
+  remotePeerArray = signal<Array<{ peerId: string; username: string; stream: MediaStream | null; avatar?: string }>>([]);
+  channelUsersData = signal<Map<string, { avatar?: string }>>(new Map());
 
   gradientCSS = 'linear-gradient(90deg, #6237A0, #9754CB)';
-
-  onImageSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      this.selectedImage = input.files[0];
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        this.selectedImagePreview = reader.result as string;
-      };
-      reader.readAsDataURL(this.selectedImage);
-    }
-  }
-
-  removeSelectedImage() {
-    this.selectedImage = null;
-    this.selectedImagePreview = null;
-
-    const input = document.querySelector<HTMLInputElement>('#chat-image-input');
-    if (input) input.value = '';
-  }
 
   channelUsers = computed(() => {
     const cc = this.currentChannel();
@@ -82,39 +57,64 @@ export class Chat implements OnInit, OnDestroy {
   messages = computed(() => this.groupService.messages());
   currentChannel = computed(() => this.groupService.currentChannel());
 
-  ngOnInit() {
+  otherChannelUsers = computed(() => {
+    const users = this.channelUsers();
+    const currentUsername = this.currentUser?.username;
+    return users.filter(u => u !== currentUsername);
+  });
+
+  async ngOnInit() {
     this.route.paramMap.subscribe(params => {
       this.groupId = params.get('groupId');
       this.groupService.initialize();
     });
 
-    // Register username with socket
     const user = this.userService.getCurrentUser();
     if (user) {
       this.sockets.emit('user:register', { username: user.username });
     }
 
-    // Handle incoming remote streams
-    this.videoService.onRemoteStream((peerId, stream) => {
-      console.log('📺 Adding remote stream from', peerId);
-      this.remoteStreams.set(peerId, stream);
-      // Update the signal to trigger change detection
-      this.remoteStreamArray.set(Array.from(this.remoteStreams.values()));
-      this.cdr.detectChanges(); // Force change detection
+    await this.fetchAllUserAvatars();
+
+    this.videoService.onRemoteStream((peerId, stream, username, avatar) => {
+      console.log('Adding remote stream from', peerId, username, 'avatar:', avatar);
+      this.remotePeers.set(peerId, { username, stream, avatar });
+      this.remotePeerArray.set(Array.from(this.remotePeers.entries()).map(([id, data]) => ({
+        peerId: id,
+        ...data
+      })));
+      this.cdr.detectChanges();
     });
 
-    // Handle stream removal
     this.videoService.onRemoveStream((peerId) => {
-      console.log('📺 Removing remote stream from', peerId);
-      this.remoteStreams.delete(peerId);
-      // Update the signal to trigger change detection
-      this.remoteStreamArray.set(Array.from(this.remoteStreams.values()));
-      this.cdr.detectChanges(); // Force change detection
+      console.log('Removing remote stream from', peerId);
+      this.remotePeers.delete(peerId);
+      this.remotePeerArray.set(Array.from(this.remotePeers.entries()).map(([id, data]) => ({
+        peerId: id,
+        ...data
+      })));
+      this.cdr.detectChanges();
     });
   }
 
+  async fetchAllUserAvatars() {
+    try {
+      const response = await fetch('http://localhost:3000/api/users');
+      const users = await response.json();
+      const usersMap = new Map<string, { avatar?: string }>();
+      
+      users.forEach((user: any) => {
+        usersMap.set(user.username, { avatar: user.avatar });
+      });
+      
+      this.channelUsersData.set(usersMap);
+      console.log('Fetched user avatars:', usersMap);
+    } catch (error) {
+      console.error('Failed to fetch user avatars:', error);
+    }
+  }
+
   ngOnDestroy() {
-    // Clean up camera if on
     if (this.isCameraOn) {
       const channel = this.currentChannel();
       const user = this.currentUser;
@@ -131,17 +131,41 @@ export class Chat implements OnInit, OnDestroy {
   joinChannel(channelId: string, channelName: string) {
     const user = this.userService.getCurrentUser();
     if (this.groupId && user) {
-      // Stop camera if currently on
       if (this.isCameraOn) {
         this.toggleCamera();
       }
       
       this.groupService.joinChannel(this.groupId, channelId, channelName, user.username);
       
-      // Clear remote streams when changing channels
-      this.remoteStreams.clear();
-      this.remoteStreamArray.set([]);
+      this.remotePeers.clear();
+      this.remotePeerArray.set([]);
     }
+  }
+
+  getPeerDataByUsername(username: string): { peerId: string; username: string; stream: MediaStream | null; avatar?: string } | null {
+    const peers = this.remotePeerArray();
+    return peers.find(p => p.username === username) || null;
+  }
+
+  onImageSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.selectedImage = input.files[0];
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.selectedImagePreview = reader.result as string;
+      };
+      reader.readAsDataURL(this.selectedImage);
+    }
+  }
+
+  removeSelectedImage() {
+    this.selectedImage = null;
+    this.selectedImagePreview = null;
+
+    const input = document.querySelector<HTMLInputElement>('#chat-image-input');
+    if (input) input.value = '';
   }
 
   async sendMessage() {
@@ -181,6 +205,12 @@ export class Chat implements OnInit, OnDestroy {
     if (avatarPath) {
       return 'http://localhost:3000' + avatarPath;
     }
+    
+    const userData = this.channelUsersData().get(username);
+    if (userData?.avatar) {
+      return 'http://localhost:3000' + userData.avatar;
+    }
+    
     return 'http://localhost:3000/uploads/avatars/avatar-placeholder.png';
   }
 
@@ -189,12 +219,11 @@ export class Chat implements OnInit, OnDestroy {
     const user = this.currentUser;
 
     if (!channel || !user) {
-      console.error("❌ No active channel or user found");
+      console.error("No active channel or user found");
       return;
     }
 
     if (!this.isCameraOn) {
-      // Check if peer is ready
       if (!this.videoService.isPeerReady()) {
         alert('Video connection not ready yet. Please wait a moment and try again.');
         return;
@@ -202,11 +231,11 @@ export class Chat implements OnInit, OnDestroy {
 
       this.isCameraOn = true;
 
-      // Start broadcast (this now handles getUserMedia internally)
       const stream = await this.videoService.startBroadcast(
         channel.channelId, 
         user.username, 
-        channel.groupId
+        channel.groupId,
+        user.avatar
       );
 
       if (stream) {
@@ -221,10 +250,8 @@ export class Chat implements OnInit, OnDestroy {
     } else {
       this.isCameraOn = false;
 
-      // Stop broadcasting
       this.videoService.stopBroadcast(channel.channelId, user.username, channel.groupId);
 
-      // Clear local video
       if (this.localVideo && this.localVideo.nativeElement) {
         this.localVideo.nativeElement.srcObject = null;
       }

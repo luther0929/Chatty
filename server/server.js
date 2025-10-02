@@ -43,7 +43,7 @@ const uploadMessageImg = multer({ storage: messageStorage });
 async function connectDB() {
   try {
     await client.connect();
-    db = client.db("chatApp"); // database name
+    db = client.db("chatApp");
     usersCollection = db.collection("users");
     groupsCollection = db.collection("groups");
     messagesCollection = db.collection("messages");
@@ -64,7 +64,7 @@ const io = require('socket.io')(server, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['polling'],  // ✅ Server also uses polling only
+  transports: ['polling'],
   pingTimeout: 60000,
   pingInterval: 25000
 });
@@ -77,9 +77,10 @@ const peerServer = ExpressPeerServer(server, {
 
 app.use('/peerjs', peerServer);
 
+const activeVideoBroadcasts = new Map();
+
 // REST API routes
 
-// Get all groups
 app.get('/api/groups', async (req, res) => {
   try {
     const groups = await groupsCollection.find().toArray();
@@ -90,7 +91,6 @@ app.get('/api/groups', async (req, res) => {
   }
 });
 
-// Get single group by ID
 app.get('/api/groups/:id', async (req, res) => {
   try {
     const group = await groupsCollection.findOne({ id: req.params.id });
@@ -102,7 +102,6 @@ app.get('/api/groups/:id', async (req, res) => {
   }
 });
 
-// Get all users
 app.get('/api/users', async (req, res) => {
   try {
     const users = await usersCollection.find().toArray();
@@ -113,7 +112,6 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Get all messages for a group channel
 app.get('/api/groups/:groupId/channels/:channelId/messages', async (req, res) => {
   try {
     const { groupId, channelId } = req.params;
@@ -130,12 +128,10 @@ app.get('/api/groups/:groupId/channels/:channelId/messages', async (req, res) =>
   }
 });
 
-// Register new user
 app.post('/api/users/register', async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // check uniqueness
     const existing = await usersCollection.findOne({ username });
     if (existing) {
       return res.status(400).json({ error: "Username already exists" });
@@ -146,7 +142,7 @@ app.post('/api/users/register', async (req, res) => {
       username,
       email,
       password,
-      roles: ["chatUser"], // default role
+      roles: ["chatUser"],
       groups: []
     };
 
@@ -158,7 +154,6 @@ app.post('/api/users/register', async (req, res) => {
   }
 });
 
-// Login
 app.post('/api/users/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -191,7 +186,13 @@ app.post('/api/users/avatar', upload.single('avatar'), async (req, res) => {
   }
 });
 
-// Ensure a default super user exists
+app.post('/api/messages/upload', uploadMessageImg.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+  res.json({ imageUrl: `/uploads/messages/${req.file.filename}` });
+});
+
 async function ensureSuperUser() {
   const superUser = await usersCollection.findOne({ username: "super" });
   if (!superUser) {
@@ -199,7 +200,7 @@ async function ensureSuperUser() {
       id: crypto.randomUUID(),
       username: "super",
       email: "super@example.com",
-      password: "123",   // 🔑 login with this password
+      password: "123",
       roles: ["superAdmin"],
       groups: []
     });
@@ -228,6 +229,22 @@ io.on('connection', (socket) => {
     socket.on('disconnect', async () => {
         if (socket.currentChannel && socket.username) {
             const [groupId, channelId] = socket.currentChannel.split(':');
+
+            const broadcasts = activeVideoBroadcasts.get(socket.currentChannel);
+            if (broadcasts) {
+                const toRemove = Array.from(broadcasts).find(b => b.username === socket.username);
+                if (toRemove) {
+                    broadcasts.delete(toRemove);
+                    io.to(socket.currentChannel).emit('video:stop', {
+                        peerId: toRemove.peerId,
+                        username: socket.username
+                    });
+                }
+                
+                if (broadcasts.size === 0) {
+                    activeVideoBroadcasts.delete(socket.currentChannel);
+                }
+            }
 
             await groupsCollection.updateOne(
                 { id: groupId, "channels.id": channelId },
@@ -267,12 +284,11 @@ io.on('connection', (socket) => {
         try{
             const group = await groupsCollection.findOne({ id: groupId });
             if (!group) return;
-            // ✅ Allow if user is group admin OR super admin
             if (group.admins.includes(performedBy) || role === 'superAdmin') {
                 await groupsCollection.deleteOne({ id: groupId });
 
                 const allGroups = await groupsCollection.find().toArray();
-                io.emit('groups:update', allGroups);  // broadcast updated list
+                io.emit('groups:update', allGroups);
             }
         } catch (err) {
             console.error("❌ groups:delete failed", err);
@@ -284,13 +300,11 @@ io.on('connection', (socket) => {
             const group = await groupsCollection.findOne({ id: groupId });
             if (!group) return;
 
-            // user is banned
             if (group.bannedMembers.includes(username)) {
                 socket.emit('groups:joinFailed', { groupId, reason: 'banned' });
                 return;
             }
             
-            // add user if not already a member
             if (!group.members.includes(username)) {
                 await groupsCollection.updateOne(
                     { id: groupId },
@@ -298,7 +312,6 @@ io.on('connection', (socket) => {
                 );
             }
 
-            // broadcast updated state to all clients
             const allGroups = await groupsCollection.find().toArray();
             io.emit('groups:update', allGroups);
             
@@ -313,7 +326,6 @@ io.on('connection', (socket) => {
             const group = await groupsCollection.findOne({ id: groupId });
             if (!group) return;
 
-            // Only promote if user is already a member and not already an admin
             if (group.members.includes(username) && !group.admins.includes(username)) {
                 await groupsCollection.updateOne(
                     { id: groupId },
@@ -321,7 +333,6 @@ io.on('connection', (socket) => {
                 );
             }
 
-            // Broadcast updated groups to everyone
             const allGroups = await groupsCollection.find().toArray();
             io.emit('groups:update', allGroups);
 
@@ -340,13 +351,12 @@ io.on('connection', (socket) => {
                 await groupsCollection.updateOne(
                     { id: groupId },
                     {
-                    $pull: { members: username },   // remove from members
-                    $addToSet: { admins: username } // ensure in admins (no dupes)
+                    $pull: { members: username },
+                    $addToSet: { admins: username }
                     }
                 );
             }
 
-            // broadcast role change + updated groups
             io.emit('users:roleUpdate', { username, role });
             const allGroups = await groupsCollection.find().toArray();
             io.emit('groups:update', allGroups);
@@ -361,10 +371,7 @@ io.on('connection', (socket) => {
             const group = await groupsCollection.findOne({ id: groupId });
             if (!group) return;
 
-            // Only allow if performedBy is group admin OR superAdmin
             if (group.admins.includes(performedBy) || role === 'superAdmin') {
-            // 1. Remove from members
-            // 2. Remove from all channels inside this group
             await groupsCollection.updateOne(
                 { id: groupId },
                 {
@@ -372,7 +379,6 @@ io.on('connection', (socket) => {
                 }
             );
 
-            // Broadcast updated groups to all clients
             const allGroups = await groupsCollection.find().toArray();
             io.emit('groups:update', allGroups);
             }
@@ -381,7 +387,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 🚫 Ban user from group
     socket.on('groups:ban', async ({ groupId, username, performedBy, role }) => {
         try {
             const group = await groupsCollection.findOne({ id: groupId });
@@ -404,7 +409,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ➕ Create channel
     socket.on('channels:create', async ({ groupId, channel, performedBy, role }) => {
         try {
             const group = await groupsCollection.findOne({ id: groupId });
@@ -433,7 +437,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 🗑 Delete channel
     socket.on('channels:delete', async ({ groupId, channelId, performedBy, role }) => {
         try {
             const group = await groupsCollection.findOne({ id: groupId });
@@ -453,7 +456,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 📝 Reports (still in-memory or you can persist to Mongo)
     let reports = [];
     socket.on('reports:create', async ({ groupId, member, reportedBy, text }) => {
         try {
@@ -478,56 +480,64 @@ io.on('connection', (socket) => {
     });
 
    socket.on('channels:join', async ({ groupId, channelId, username }) => {
-        try {
-            socket.username = username; // Store username
-            
-            // leave previous channel if exists
-            if (socket.currentChannel) {
-                const [oldGroupId, oldChannelId] = socket.currentChannel.split(':');
-
-                await groupsCollection.updateOne(
-                    { id: oldGroupId, "channels.id": oldChannelId },
-                    { $pull: { "channels.$.users": username } }
-                );
-
-                socket.leave(socket.currentChannel);
-
-                io.to(socket.currentChannel).emit('channels:system', {
-                    username: 'System',
-                    text: `${username} left the channel`,
-                    timestamp: new Date(),
-                });
-            }
-
-            const room = `${groupId}:${channelId}`;
-            socket.currentChannel = room;
-            socket.join(room);
-
-            console.log(`✅ ${username} joined channel ${room}`);
+    try {
+        socket.username = username;
+        
+        if (socket.currentChannel) {
+            const [oldGroupId, oldChannelId] = socket.currentChannel.split(':');
 
             await groupsCollection.updateOne(
-                { id: groupId, "channels.id": channelId },
-                { $addToSet: { "channels.$.users": username } }
+                { id: oldGroupId, "channels.id": oldChannelId },
+                { $pull: { "channels.$.users": username } }
             );
 
-            socket.emit('channels:joined', { groupId, channelId });
+            socket.leave(socket.currentChannel);
 
-            io.to(room).emit('channels:system', {
+            io.to(socket.currentChannel).emit('channels:system', {
                 username: 'System',
-                text: `${username} joined the channel`,
+                text: `${username} left the channel`,
                 timestamp: new Date(),
             });
-
-            const allGroups = await groupsCollection.find().toArray();
-            io.emit('groups:update', allGroups);
-
-        } catch (err) {
-            console.error("❌ channels:join failed", err);
         }
-    });
 
+        const room = `${groupId}:${channelId}`;
+        socket.currentChannel = room;
+        socket.join(room);
 
-    // 🚪 Leave group
+        console.log(`✅ ${username} joined channel ${room}`);
+
+        await groupsCollection.updateOne(
+            { id: groupId, "channels.id": channelId },
+            { $addToSet: { "channels.$.users": username } }
+        );
+
+        socket.emit('channels:joined', { groupId, channelId });
+
+        io.to(room).emit('channels:system', {
+            username: 'System',
+            text: `${username} joined the channel`,
+            timestamp: new Date(),
+        });
+
+        const existingBroadcasts = activeVideoBroadcasts.get(room) || new Set();
+        existingBroadcasts.forEach(broadcast => {
+            socket.emit('video:broadcast', {
+                peerId: broadcast.peerId,
+                username: broadcast.username,
+                avatar: broadcast.avatar,
+                channelId,
+                groupId
+            });
+        });
+
+        const allGroups = await groupsCollection.find().toArray();
+        io.emit('groups:update', allGroups);
+
+    } catch (err) {
+        console.error("❌ channels:join failed", err);
+    }
+});
+
     socket.on('groups:leave', async ({ groupId, username }) => {
         try {
             await groupsCollection.updateOne(
@@ -544,31 +554,26 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 🚪 Leave channel
     socket.on('channels:leave', async ({ groupId, channelId, username }) => {
         try {
             const room = `${groupId}:${channelId}`;
 
-            // ✅ leave the socket.io room
             socket.leave(room);
             socket.currentChannel = null;
 
             console.log(`👋 ${username} left channel ${room}`);
 
-            // ✅ update DB to remove user from channel.users
             await groupsCollection.updateOne(
                 { id: groupId, "channels.id": channelId },
-                { $pull: { "channels.$.users": username } } // remove user if present
+                { $pull: { "channels.$.users": username } }
             );
 
-            // system message
             io.to(room).emit('channels:system', {
                 username: 'System',
                 text: `${username} left the channel`,
                 timestamp: new Date(),
             });
 
-            // ✅ broadcast updated groups to everyone
             const allGroups = await groupsCollection.find().toArray();
             io.emit('groups:update', allGroups);
 
@@ -577,13 +582,10 @@ io.on('connection', (socket) => {
         }
     });
 
-
-    // 💬 Send message
     socket.on('channels:message', async ({ groupId, channelId, username, text, avatar, image }) => {
         try {
             const msg = { username, text, avatar, image, timestamp: new Date() };
 
-            // push to DB
             await groupsCollection.updateOne(
                 { id: groupId, "channels.id": channelId },
                 { $push: { "channels.$.messages": msg } }
@@ -591,7 +593,6 @@ io.on('connection', (socket) => {
 
             console.log(`💬 Message from ${username} in ${groupId}:${channelId}`);
 
-            // broadcast to everyone in the room
             io.to(`${groupId}:${channelId}`).emit('channels:message', msg);
 
         } catch (err) {
@@ -599,8 +600,6 @@ io.on('connection', (socket) => {
         }
     });
 
-
-    // 📜 Get messages
     socket.on('channels:getMessages', async ({ groupId, channelId }) => {
         try {
             const group = await groupsCollection.findOne({ id: groupId });
@@ -613,7 +612,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 🙋 Request join
     socket.on('groups:requestJoin', async ({ groupId, username }) => {
         try {
             await groupsCollection.updateOne(
@@ -628,13 +626,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ✅ Approve join
     socket.on('groups:approveJoin', async ({ groupId, username, actingUser }) => {
         try {
             const group = await groupsCollection.findOne({ id: groupId });
             if (!group) return;
 
-            // TODO: add role check (super or group admin)
             await groupsCollection.updateOne(
             { id: groupId },
             {
@@ -650,7 +646,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ❌ Decline join
     socket.on('groups:declineJoin', async ({ groupId, username, actingUser }) => {
         try {
             const group = await groupsCollection.findOne({ id: groupId });
@@ -668,7 +663,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 🗑 Delete user globally
     socket.on('users:delete', async (username) => {
         try {
             await usersCollection.deleteOne({ username });
@@ -696,31 +690,40 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('video:broadcast', ({ groupId, channelId, username, peerId }) => {
+    socket.on('video:broadcast', async ({ groupId, channelId, username, peerId, avatar }) => {
         const room = `${groupId}:${channelId}`;
         
-        // Ensure broadcaster is in the room
         if (!socket.rooms.has(room)) {
             socket.join(room);
         }
         
         console.log(`📡 ${username} broadcasting video in ${room} with peer ${peerId}`);
         
-        // Broadcast to everyone EXCEPT the sender
-        socket.to(room).emit('video:broadcast', { peerId, username, channelId, groupId });
+        if (!activeVideoBroadcasts.has(room)) {
+            activeVideoBroadcasts.set(room, new Set());
+        }
+        activeVideoBroadcasts.get(room).add({ peerId, username, avatar });
+        
+        socket.to(room).emit('video:broadcast', { peerId, username, channelId, groupId, avatar });
     });
-    
+
     socket.on('video:stop', ({ groupId, channelId, username, peerId }) => {
         const room = `${groupId}:${channelId}`;
         console.log(`🛑 ${username} stopped broadcasting in ${room}`);
-        socket.to(room).emit('video:stop', { peerId, username });
-    });
-
-    app.post('/api/messages/upload', uploadMessageImg.single('image'), (req, res) => {
-        if (!req.file) {
-            return res.status(400).json({ error: "No file uploaded" });
+        
+        const broadcasts = activeVideoBroadcasts.get(room);
+        if (broadcasts) {
+            const toRemove = Array.from(broadcasts).find(b => b.peerId === peerId);
+            if (toRemove) {
+                broadcasts.delete(toRemove);
+            }
+            
+            if (broadcasts.size === 0) {
+                activeVideoBroadcasts.delete(room);
+            }
         }
-        res.json({ imageUrl: `/uploads/messages/${req.file.filename}` });
+        
+        socket.to(room).emit('video:stop', { peerId, username });
     });
     
 });

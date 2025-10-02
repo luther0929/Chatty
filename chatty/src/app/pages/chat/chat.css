@@ -13,3 +13,42 @@
   border-radius: 4px;
   font-size: 12px;
 }
+
+.video-grid-container {
+  scrollbar-width: thin;
+  scrollbar-color: #9754CB #f3ecff;
+}
+
+.video-grid-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.video-grid-container::-webkit-scrollbar-track {
+  background: #f3ecff;
+  border-radius: 4px;
+}
+
+.video-grid-container::-webkit-scrollbar-thumb {
+  background: #9754CB;
+  border-radius: 4px;
+}
+
+.video-grid-container::-webkit-scrollbar-thumb:hover {
+  background: #6237A0;
+}
+
+.video-label {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.video-container {
+  position: relative;
+}

@@ -48,24 +48,67 @@
             </span>
           </div>
 
-          <div class="video-grid d-flex flex-wrap gap-2 mt-3">
-            <!-- Local video -->
-            <div *ngIf="isCameraOn" class="video-container">
-              <video #localVideo autoplay muted playsinline width="250" style="border-radius: 0.5rem; border: 2px solid #6237A0;"></video>
-              <div class="video-label">You</div>
-            </div>
+          <!-- Video grid with horizontal scroll -->
+        <!-- Video grid with horizontal scroll -->
+  <!-- Video grid with horizontal scroll -->
+<div class="video-grid-container mb-3" style="overflow-x: auto; overflow-y: hidden;">
+  <div class="d-flex gap-2 mt-3" style="min-width: min-content;">
+    
+    <!-- Local user (always show) -->
+    <div class="video-container position-relative" style="flex-shrink: 0;">
+      <!-- Avatar when camera is off -->
+      <div *ngIf="!isCameraOn" 
+           class="d-flex align-items-center justify-content-center"
+           style="width: 250px; height: 187.5px; border-radius: 0.5rem; border: 2px solid #6237A0; background: linear-gradient(135deg, #6237A0, #9754CB);">
+        <img [src]="getAvatarUrl(currentUser?.username || '', currentUser?.avatar)"
+             class="rounded-circle"
+             style="width: 100px; height: 100px; object-fit: cover; border: 3px solid white;">
+      </div>
+      
+      <!-- Video when camera is on -->
+      <video *ngIf="isCameraOn" 
+             #localVideo 
+             autoplay 
+             muted 
+             playsinline 
+             width="250" 
+             style="border-radius: 0.5rem; border: 2px solid #6237A0;">
+      </video>
+      
+      <div class="video-label">You</div>
+    </div>
 
-            <!-- Remote videos -->
-            <div *ngFor="let stream of remoteStreamArray()" class="video-container">
-              <video 
-                [srcObject]="stream"
-                autoplay
-                playsinline
-                width="250"
-                style="border-radius: 0.5rem; border: 2px solid #9754CB;">
-              </video>
-            </div>
-          </div>
+<!-- All other users in channel -->
+<div *ngFor="let user of otherChannelUsers()" 
+     class="video-container position-relative" 
+     style="flex-shrink: 0;">
+  
+  <!-- Check if this user has an active stream -->
+  @if(getPeerDataByUsername(user); as peerData) {
+    <!-- Show video if they're broadcasting -->
+    <video [srcObject]="peerData.stream"
+           autoplay
+           playsinline
+           width="250"
+           style="border-radius: 0.5rem; border: 2px solid #9754CB;">
+    </video>
+    <div class="video-label">{{ user }}</div>
+  } @else {
+    <!-- Show avatar placeholder if no stream -->
+    <div class="d-flex align-items-center justify-content-center"
+         style="width: 250px; height: 187.5px; border-radius: 0.5rem; border: 2px solid #9754CB; background: linear-gradient(135deg, #9754CB, #B794F6);">
+      <div class="text-center">
+        <img [src]="getAvatarUrl(user)"
+             class="rounded-circle"
+             style="width: 100px; height: 100px; object-fit: cover; border: 3px solid white;">
+        <div class="text-white mt-2 fw-semibold">{{ user }}</div>
+      </div>
+    </div>
+  }
+</div>
+    
+  </div>
+</div>
           
           <div class="row g-3">
             <!-- LEFT: Messages -->
