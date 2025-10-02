@@ -1,10 +1,11 @@
-import { Component, inject, OnInit, computed, signal, ElementRef, ViewChild } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, computed, signal, ElementRef, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { GroupService } from '../../services/group-service/group-service';
 import { UserService } from '../../services/user-service/user-service';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { VideoService } from '../../services/video-service/video-service';
+import { Sockets } from '../../services/sockets/sockets';
 
 @Component({
   selector: 'app-chat',
@@ -13,12 +14,13 @@ import { VideoService } from '../../services/video-service/video-service';
   templateUrl: './chat.html',
   styleUrl: './chat.css'
 })
-export class Chat implements OnInit {
+export class Chat implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private groupService = inject(GroupService);
   private userService = inject(UserService);
   private videoService = inject(VideoService);
+  private sockets = inject(Sockets);
 
   groupId: string | null = null;
   selectedImage: File | null = null;
@@ -27,9 +29,8 @@ export class Chat implements OnInit {
 
   @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
 
-  remotePeerId = '';
   isCameraOn = false;
-  remoteStreams: MediaStream[] = [];
+  remoteStreams = new Map<string, MediaStream>();
 
   initialOf(name?: string): string {
     const n = (name ?? '').trim();
@@ -43,7 +44,6 @@ export class Chat implements OnInit {
     if (input.files && input.files.length > 0) {
       this.selectedImage = input.files[0];
 
-      // Generate preview URL
       const reader = new FileReader();
       reader.onload = () => {
         this.selectedImagePreview = reader.result as string;
@@ -56,14 +56,13 @@ export class Chat implements OnInit {
     this.selectedImage = null;
     this.selectedImagePreview = null;
 
-    // Reset the file input so same image can be selected again
     const input = document.querySelector<HTMLInputElement>('#chat-image-input');
     if (input) input.value = '';
   }
 
   channelUsers = computed(() => {
-    const cc = this.currentChannel();        // triggers on channel change
-    const groups = this.groupService.groups(); // triggers on server updates
+    const cc = this.currentChannel();
+    const groups = this.groupService.groups();
     if (!cc) return [];
     const g = groups.find(g => g.id === cc.groupId);
     const ch = g?.channels.find(c => c.id === cc.channelId);
@@ -83,35 +82,61 @@ export class Chat implements OnInit {
   ngOnInit() {
     this.route.paramMap.subscribe(params => {
       this.groupId = params.get('groupId');
-      this.groupService.initialize(); // ✅ fetch groups from server on refresh
+      this.groupService.initialize();
     });
 
-    // ✅ Register for new remote streams
+    // Register username with socket
+    const user = this.userService.getCurrentUser();
+    if (user) {
+      this.sockets.emit('user:register', { username: user.username });
+    }
+
+    // Handle incoming remote streams
     this.videoService.onRemoteStream((peerId, stream) => {
-      const existingIndex = this.remoteStreams.findIndex(
-        (s: any) => s._peerId === peerId
-      );
-
-      if (existingIndex >= 0) {
-        this.remoteStreams[existingIndex] = stream;
-      } else {
-        (stream as any)._peerId = peerId; // tag stream with peerId
-        this.remoteStreams = [...this.remoteStreams, stream];
-      }
+      console.log('📺 Adding remote stream from', peerId);
+      this.remoteStreams.set(peerId, stream);
     });
+
+    // Handle stream removal
+    this.videoService.onRemoveStream((peerId) => {
+      console.log('📺 Removing remote stream from', peerId);
+      this.remoteStreams.delete(peerId);
+    });
+  }
+
+  ngOnDestroy() {
+    // Clean up camera if on
+    if (this.isCameraOn) {
+      const channel = this.currentChannel();
+      const user = this.currentUser;
+      if (channel && user) {
+        this.videoService.stopBroadcast(channel.channelId, user.username, channel.groupId);
+      }
+    }
   }
 
   get currentUser() {
     return this.userService.getCurrentUser();
   }
 
+  get remoteStreamArray(): MediaStream[] {
+    return Array.from(this.remoteStreams.values());
+  }
+
   joinChannel(channelId: string, channelName: string) {
     const user = this.userService.getCurrentUser();
     if (this.groupId && user) {
+      // Stop camera if currently on
+      if (this.isCameraOn) {
+        this.toggleCamera();
+      }
+      
       this.groupService.joinChannel(this.groupId, channelId, channelName, user.username);
+      
+      // Clear remote streams when changing channels
+      this.remoteStreams.clear();
     }
   }
-
 
   async sendMessage() {
     const text = this.messageText().trim();
@@ -132,7 +157,8 @@ export class Chat implements OnInit {
       });
       const result = await response.json();
       imageUrl = result.imageUrl;
-      this.selectedImage = null; // reset
+      this.selectedImage = null;
+      this.selectedImagePreview = null;
     }
 
     if (text || imageUrl) {
@@ -149,12 +175,10 @@ export class Chat implements OnInit {
     if (avatarPath) {
       return 'http://localhost:3000' + avatarPath;
     }
-    // ✅ Consistent fallback with server
     return 'http://localhost:3000/uploads/avatars/avatar-placeholder.png';
   }
 
   async toggleCamera() {
-    // always fetch current channel and user at start
     const channel = this.currentChannel();
     const user = this.currentUser;
 
@@ -164,24 +188,40 @@ export class Chat implements OnInit {
     }
 
     if (!this.isCameraOn) {
+      // Check if peer is ready
+      if (!this.videoService.isPeerReady()) {
+        alert('Video connection not ready yet. Please wait a moment and try again.');
+        return;
+      }
+
       this.isCameraOn = true;
 
-      // capture local stream
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      this.localVideo.nativeElement.srcObject = stream;
-      this.localVideo.nativeElement.muted = true;
-      await this.localVideo.nativeElement.play();
+      // Start broadcast (this now handles getUserMedia internally)
+      const stream = await this.videoService.startBroadcast(
+        channel.channelId, 
+        user.username, 
+        channel.groupId
+      );
 
-      // announce broadcast to channel
-      this.videoService.startBroadcast(stream, channel.channelId, user.username, channel.groupId);
+      if (stream) {
+        this.localVideo.nativeElement.srcObject = stream;
+        this.localVideo.nativeElement.muted = true;
+        await this.localVideo.nativeElement.play();
+      } else {
+        this.isCameraOn = false;
+        alert('Failed to access camera');
+      }
 
     } else {
       this.isCameraOn = false;
 
-      // stop broadcasting to channel
-      this.videoService.stopBroadcast(channel.channelId, user.username);
+      // Stop broadcasting
+      this.videoService.stopBroadcast(channel.channelId, user.username, channel.groupId);
 
-      this.localVideo.nativeElement.srcObject = null;
+      // Clear local video
+      if (this.localVideo && this.localVideo.nativeElement) {
+        this.localVideo.nativeElement.srcObject = null;
+      }
     }
   }
 }

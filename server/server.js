@@ -211,6 +211,11 @@ async function ensureSuperUser() {
 
 io.on('connection', (socket) => {
 
+    socket.on('user:register', ({ username }) => {
+        socket.username = username;
+        console.log(`✅ Socket registered for user: ${username}`);
+    });
+
     socket.on('groups:getAll', async () => {
         const allGroups = await groupsCollection.find().toArray();
         socket.emit('groups:update', allGroups);
@@ -474,11 +479,12 @@ io.on('connection', (socket) => {
 
    socket.on('channels:join', async ({ groupId, channelId, username }) => {
         try {
+            socket.username = username; // Store username
+            
             // leave previous channel if exists
             if (socket.currentChannel) {
                 const [oldGroupId, oldChannelId] = socket.currentChannel.split(':');
 
-                // remove from old channel in DB
                 await groupsCollection.updateOne(
                     { id: oldGroupId, "channels.id": oldChannelId },
                     { $pull: { "channels.$.users": username } }
@@ -499,7 +505,6 @@ io.on('connection', (socket) => {
 
             console.log(`✅ ${username} joined channel ${room}`);
 
-            // add to new channel in DB
             await groupsCollection.updateOne(
                 { id: groupId, "channels.id": channelId },
                 { $addToSet: { "channels.$.users": username } }
@@ -520,6 +525,7 @@ io.on('connection', (socket) => {
             console.error("❌ channels:join failed", err);
         }
     });
+
 
     // 🚪 Leave group
     socket.on('groups:leave', async ({ groupId, username }) => {
@@ -692,8 +698,22 @@ io.on('connection', (socket) => {
 
     socket.on('video:broadcast', ({ groupId, channelId, username, peerId }) => {
         const room = `${groupId}:${channelId}`;
-        console.log(`🎥 ${username} broadcasting in ${room} with peer ${peerId}`);
-        io.to(room).emit('video:broadcast', { peerId, username, channelId, groupId });
+        
+        // Ensure broadcaster is in the room
+        if (!socket.rooms.has(room)) {
+            socket.join(room);
+        }
+        
+        console.log(`📡 ${username} broadcasting video in ${room} with peer ${peerId}`);
+        
+        // Broadcast to everyone EXCEPT the sender
+        socket.to(room).emit('video:broadcast', { peerId, username, channelId, groupId });
+    });
+    
+    socket.on('video:stop', ({ groupId, channelId, username, peerId }) => {
+        const room = `${groupId}:${channelId}`;
+        console.log(`🛑 ${username} stopped broadcasting in ${room}`);
+        socket.to(room).emit('video:stop', { peerId, username });
     });
 
     app.post('/api/messages/upload', uploadMessageImg.single('image'), (req, res) => {

@@ -50,19 +50,23 @@
 
           <div class="video-grid d-flex flex-wrap gap-2 mt-3">
             <!-- Local video -->
-            <video #localVideo autoplay muted playsinline width="250"></video>
+            <div *ngIf="isCameraOn" class="video-container">
+              <video #localVideo autoplay muted playsinline width="250" style="border-radius: 0.5rem; border: 2px solid #6237A0;"></video>
+              <div class="video-label">You</div>
+            </div>
 
-            <!-- ✅ Remote videos container -->
-            <div id="remote-videos" class="remote-video-grid">
-              <video *ngFor="let stream of remoteStreams"
-                    [srcObject]="stream"
-                    autoplay
-                    playsinline
-                    width="200">
+            <!-- Remote videos -->
+            <div *ngFor="let stream of remoteStreamArray" class="video-container">
+              <video 
+                [srcObject]="stream"
+                autoplay
+                playsinline
+                width="250"
+                style="border-radius: 0.5rem; border: 2px solid #9754CB;">
               </video>
             </div>
           </div>
-
+          
           <div class="row g-3">
             <!-- LEFT: Messages -->
             <div class="col-12 col-lg-9">
