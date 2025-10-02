@@ -8,10 +8,11 @@ import { Sockets } from '../sockets/sockets';
 export class VideoService {
   private peer!: Peer;
   private peerId: string | null = null;
-  private connections: MediaConnection[] = [];
+  private connections: Map<string, MediaConnection> = new Map();
   private currentStream: MediaStream | null = null;
   private remoteHandler?: (peerId: string, stream: MediaStream) => void;
   private removeStreamHandler?: (peerId: string) => void;
+  private activePeers = new Set<string>(); // Track which peers we're connected to
 
   constructor(private sockets: Sockets) {
     this.initPeer();
@@ -29,144 +30,261 @@ export class VideoService {
       console.log('✅ PeerJS connected with ID:', id);
     });
 
-  // Handle incoming calls
-  this.peer.on('call', (call) => {
-    console.log('📞 Incoming call from', call.peer);
-    console.log('Current stream available?', !!this.currentStream);
-
+// Handle incoming calls
+// Handle incoming calls
+this.peer.on('call', (call) => {
+  console.log('📞 Incoming call from', call.peer);
+  
+  // Check if we already have a connection with this peer
+  const existingConnection = this.connections.get(call.peer);
+  
+  if (existingConnection && existingConnection.open) {
+    console.log('⚠️ Already have open connection with', call.peer, '- answering new call without closing existing');
+    // Don't close the existing connection - just answer this new one
+    // The caller needs our stream, but we already have theirs
+    
     if (this.currentStream) {
-      console.log('Stream tracks:', this.currentStream.getTracks());
       call.answer(this.currentStream);
-      console.log('✅ Answered call with current stream');
+      console.log('✅ Answered new call with current stream (keeping existing connection)');
     } else {
-      console.warn('⚠️ No local stream available, answering with empty stream');
       call.answer(new MediaStream());
     }
+    
+    // Don't store this connection or set up handlers
+    // We keep the original connection for receiving their stream
+    return;
+  }
+  
+  // This is a new peer connection
+  this.activePeers.add(call.peer);
+  
+  console.log('Current stream available?', !!this.currentStream);
 
-    let streamReceived = false; // Prevent duplicate handling
+  if (this.currentStream) {
+    console.log('Stream tracks:', this.currentStream.getTracks());
+    call.answer(this.currentStream);
+    console.log('✅ Answered call with current stream');
+  } else {
+    console.warn('⚠️ No local stream available, answering with empty stream');
+    call.answer(new MediaStream());
+  }
 
-    call.on('stream', (remoteStream) => {
-      if (streamReceived) return; // Ignore duplicate stream events
-      streamReceived = true;
+  let streamReceived = false;
 
-      console.log(`🎥 Received remote stream from ${call.peer}`);
-      console.log('Remote stream tracks:', remoteStream.getTracks());
-      
-      if (this.remoteHandler) {
-        this.remoteHandler(call.peer, remoteStream);
-      }
-    });
+  call.on('stream', (remoteStream) => {
+    if (streamReceived) return;
+    streamReceived = true;
 
-    call.on('close', () => {
-      console.log(`📴 Call closed with ${call.peer}`);
+    console.log(`🎥 Received remote stream from ${call.peer}`);
+    console.log('Remote stream tracks:', remoteStream.getTracks());
+    
+    if (this.remoteHandler) {
+      this.remoteHandler(call.peer, remoteStream);
+    }
+  });
+
+  call.on('close', () => {
+    console.log(`📴 Call closed with ${call.peer}`);
+    const currentConnection = this.connections.get(call.peer);
+    if (!currentConnection || currentConnection === call) {
+      this.activePeers.delete(call.peer);
+      this.connections.delete(call.peer);
       if (this.removeStreamHandler) {
         this.removeStreamHandler(call.peer);
       }
-    });
-
-    call.on('error', (err) => {
-      console.error('❌ Call error:', err);
-    });
-
-    this.connections.push(call);
+    }
   });
 
-  // When other peers broadcast
-  this.sockets.on<any>('video:broadcast', ({ peerId, username, channelId, groupId }) => {
-    if (!this.peer || !this.peerId) {
-      console.warn('⚠️ Peer not ready yet');
-      return;
-    }
-    if (peerId === this.peerId) return; // ignore self
+  call.on('error', (err) => {
+    console.error('❌ Call error:', err);
+    this.activePeers.delete(call.peer);
+    this.connections.delete(call.peer);
+  });
 
-    console.log(`📡 Incoming broadcast from ${username} (${peerId})`);
+  this.connections.set(call.peer, call);
+});
 
-    // Create a canvas-based dummy video track
-    const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 480;
-    const canvasStream = canvas.captureStream();
+// When other peers broadcast
+this.sockets.on<any>('video:broadcast', ({ peerId, username, channelId, groupId }) => {
+  if (!this.peer || !this.peerId) {
+    console.warn('⚠️ Peer not ready yet');
+    return;
+  }
+  if (peerId === this.peerId) return; // ignore self
+
+  // Check if we're already connected to this peer
+  // Check if we're already connected to this peer
+if (this.activePeers.has(peerId)) {
+  console.log(`⚠️ Already connected to ${peerId} - calling them again to get their new stream`);
+  
+  // They started broadcasting after we connected - call them again
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 480;
+  const canvasStream = canvas.captureStream();
+  
+  const audioContext = new AudioContext();
+  const oscillator = audioContext.createOscillator();
+  const dst = audioContext.createMediaStreamDestination();
+  oscillator.connect(dst);
+  oscillator.start();
+  
+  const dummyStream = new MediaStream([
+    ...canvasStream.getVideoTracks(),
+    ...dst.stream.getAudioTracks()
+  ]);
+
+  console.log(`📞 Re-calling peer ${peerId} to get their broadcast stream...`);
+  const newCall = this.peer.call(peerId, dummyStream);
+
+  if (!newCall) {
+    console.error("❌ Failed to create call to", peerId);
+    dummyStream.getTracks().forEach(track => track.stop());
+    oscillator.stop();
+    audioContext.close().catch(() => {});
+    return;
+  }
+
+  let streamReceived = false;
+
+  newCall.on('stream', (remoteStream) => {
+    if (streamReceived) return;
+    streamReceived = true;
+
+    console.log(`🎥 Received NEW broadcast stream from ${username} (${peerId})`);
+    console.log('Stream tracks:', remoteStream.getTracks());
     
-    // Create a silent audio track
-    const audioContext = new AudioContext();
-    const oscillator = audioContext.createOscillator();
-    const dst = audioContext.createMediaStreamDestination();
-    oscillator.connect(dst);
-    oscillator.start();
+    // DON'T close the old connection - just replace it silently
+    // The old connection will close naturally when PeerJS cleans up
+    this.connections.set(peerId, newCall);
     
-    // Combine video and audio
-    const dummyStream = new MediaStream([
-      ...canvasStream.getVideoTracks(),
-      ...dst.stream.getAudioTracks()
-    ]);
-
-    console.log(`📞 Calling peer ${peerId} with dummy stream...`);
-    const call = this.peer.call(peerId, dummyStream);
-
-    if (!call) {
-      console.error("❌ Failed to create PeerJS call to", peerId);
-      // Clean up if call fails
-      dummyStream.getTracks().forEach(track => track.stop());
-      oscillator.stop();
-      audioContext.close().catch(() => {}); // Ignore if already closed
-      return;
+    // Update the stream handler - this will replace the old stream in the UI
+    if (this.remoteHandler) {
+      this.remoteHandler(peerId, remoteStream);
     }
+    
+    dummyStream.getTracks().forEach(track => track.stop());
+    oscillator.stop();
+    audioContext.close().catch(() => {});
+  });
 
-    let streamReceived = false; // Prevent duplicate handling
-
-    call.on('stream', (remoteStream) => {
-      if (streamReceived) return; // Ignore duplicate stream events
-      streamReceived = true;
-
-      console.log(`🎥 Received remote stream from ${username} (${peerId})`);
-      console.log('Stream tracks:', remoteStream.getTracks());
-      
-      if (this.remoteHandler) {
-        this.remoteHandler(peerId, remoteStream);
-      }
-      
-      // Clean up dummy stream
-      dummyStream.getTracks().forEach(track => track.stop());
-      oscillator.stop();
-      audioContext.close().catch(() => {}); // Ignore error if already closed
-    });
-
-    call.on('close', () => {
-      console.log(`📴 Stream ended from ${peerId}`);
+  newCall.on('close', () => {
+    console.log(`📴 Re-call closed with ${peerId}`);
+    const currentConnection = this.connections.get(peerId);
+    if (currentConnection === newCall) {
+      this.connections.delete(peerId);
+      this.activePeers.delete(peerId);
       if (this.removeStreamHandler) {
         this.removeStreamHandler(peerId);
       }
-    });
-
-    call.on('error', (err) => {
-      console.error('❌ Peer call error:', err);
-      // Clean up on error
-      dummyStream.getTracks().forEach(track => track.stop());
-      oscillator.stop();
-      audioContext.close().catch(() => {});
-    });
-
-    this.connections.push(call);
+    }
   });
+
+  newCall.on('error', (err) => {
+    console.error('❌ Re-call error:', err);
+    dummyStream.getTracks().forEach(track => track.stop());
+    oscillator.stop();
+    audioContext.close().catch(() => {});
+  });
+
+  return;
+}
+
+  // Mark as active immediately before creating call
+  this.activePeers.add(peerId);
+
+  console.log(`📡 Incoming broadcast from ${username} (${peerId})`);
+
+  // Create a canvas-based dummy video track
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 480;
+  const canvasStream = canvas.captureStream();
+  
+  // Create a silent audio track
+  const audioContext = new AudioContext();
+  const oscillator = audioContext.createOscillator();
+  const dst = audioContext.createMediaStreamDestination();
+  oscillator.connect(dst);
+  oscillator.start();
+  
+  // Combine video and audio
+  const dummyStream = new MediaStream([
+    ...canvasStream.getVideoTracks(),
+    ...dst.stream.getAudioTracks()
+  ]);
+
+  console.log(`📞 Calling peer ${peerId} with dummy stream...`);
+  const call = this.peer.call(peerId, dummyStream);
+
+  if (!call) {
+    console.error("❌ Failed to create PeerJS call to", peerId);
+    this.activePeers.delete(peerId);
+    dummyStream.getTracks().forEach(track => track.stop());
+    oscillator.stop();
+    audioContext.close().catch(() => {});
+    return;
+  }
+
+  let streamReceived = false;
+
+  call.on('stream', (remoteStream) => {
+    if (streamReceived) return;
+    streamReceived = true;
+
+    console.log(`🎥 Received remote stream from ${username} (${peerId})`);
+    console.log('Stream tracks:', remoteStream.getTracks());
+    
+    if (this.remoteHandler) {
+      this.remoteHandler(peerId, remoteStream);
+    }
+    
+    // Clean up dummy stream
+    dummyStream.getTracks().forEach(track => track.stop());
+    oscillator.stop();
+    audioContext.close().catch(() => {});
+  });
+
+  call.on('close', () => {
+    console.log(`📴 Stream ended from ${peerId}`);
+    this.activePeers.delete(peerId);
+    this.connections.delete(peerId);
+    if (this.removeStreamHandler) {
+      this.removeStreamHandler(peerId);
+    }
+  });
+
+  call.on('error', (err) => {
+    console.error('❌ Peer call error:', err);
+    this.activePeers.delete(peerId);
+    this.connections.delete(peerId);
+    dummyStream.getTracks().forEach(track => track.stop());
+    oscillator.stop();
+    audioContext.close().catch(() => {});
+  });
+
+  this.connections.set(peerId, call);
+});
 
     // When someone stops broadcasting
     this.sockets.on<any>('video:stop', ({ peerId, username }) => {
       console.log(`🛑 ${username} stopped broadcasting (${peerId})`);
+      
+      const conn = this.connections.get(peerId);
+      if (conn) {
+        conn.close();
+      }
+      
+      this.activePeers.delete(peerId);
+      this.connections.delete(peerId);
+      
       if (this.removeStreamHandler) {
         this.removeStreamHandler(peerId);
       }
-      
-      // Close connection to that peer
-      this.connections = this.connections.filter(conn => {
-        if (conn.peer === peerId) {
-          conn.close();
-          return false;
-        }
-        return true;
-      });
     });
   }
 
+  // Keep all other methods the same...
   async enableCamera(localVideo: HTMLVideoElement) {
     try {
       this.currentStream = await navigator.mediaDevices.getUserMedia({
@@ -197,8 +315,9 @@ export class VideoService {
   }
 
   cleanup() {
-    this.connections.forEach((c) => c.close());
-    this.connections = [];
+    this.connections.forEach((conn) => conn.close());
+    this.connections.clear();
+    this.activePeers.clear();
     this.currentStream?.getTracks().forEach((t) => t.stop());
     this.currentStream = null;
     if (this.peer) {
@@ -214,7 +333,6 @@ export class VideoService {
     }
 
     try {
-      // Get media stream
       this.currentStream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true

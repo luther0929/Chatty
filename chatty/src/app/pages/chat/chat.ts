@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, OnDestroy, computed, signal, ElementRef, ViewChild } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, computed, signal, ElementRef, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { GroupService } from '../../services/group-service/group-service';
 import { UserService } from '../../services/user-service/user-service';
@@ -31,6 +31,9 @@ export class Chat implements OnInit, OnDestroy {
 
   isCameraOn = false;
   remoteStreams = new Map<string, MediaStream>();
+  remoteStreamArray = signal<MediaStream[]>([]);
+
+  private cdr = inject(ChangeDetectorRef);
 
   initialOf(name?: string): string {
     const n = (name ?? '').trim();
@@ -95,12 +98,18 @@ export class Chat implements OnInit, OnDestroy {
     this.videoService.onRemoteStream((peerId, stream) => {
       console.log('📺 Adding remote stream from', peerId);
       this.remoteStreams.set(peerId, stream);
+      // Update the signal to trigger change detection
+      this.remoteStreamArray.set(Array.from(this.remoteStreams.values()));
+      this.cdr.detectChanges(); // Force change detection
     });
 
     // Handle stream removal
     this.videoService.onRemoveStream((peerId) => {
       console.log('📺 Removing remote stream from', peerId);
       this.remoteStreams.delete(peerId);
+      // Update the signal to trigger change detection
+      this.remoteStreamArray.set(Array.from(this.remoteStreams.values()));
+      this.cdr.detectChanges(); // Force change detection
     });
   }
 
@@ -119,10 +128,6 @@ export class Chat implements OnInit, OnDestroy {
     return this.userService.getCurrentUser();
   }
 
-  get remoteStreamArray(): MediaStream[] {
-    return Array.from(this.remoteStreams.values());
-  }
-
   joinChannel(channelId: string, channelName: string) {
     const user = this.userService.getCurrentUser();
     if (this.groupId && user) {
@@ -135,6 +140,7 @@ export class Chat implements OnInit, OnDestroy {
       
       // Clear remote streams when changing channels
       this.remoteStreams.clear();
+      this.remoteStreamArray.set([]);
     }
   }
 

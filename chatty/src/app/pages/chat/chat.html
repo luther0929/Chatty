@@ -56,7 +56,7 @@
             </div>
 
             <!-- Remote videos -->
-            <div *ngFor="let stream of remoteStreamArray" class="video-container">
+            <div *ngFor="let stream of remoteStreamArray()" class="video-container">
               <video 
                 [srcObject]="stream"
                 autoplay
