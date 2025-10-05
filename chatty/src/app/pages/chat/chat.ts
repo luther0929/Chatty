@@ -29,11 +29,15 @@ export class Chat implements OnInit, OnDestroy {
   messageText = signal('');
 
   @ViewChild('localVideo') localVideo!: ElementRef<HTMLVideoElement>;
+  @ViewChild('localScreenShare') localScreenShare!: ElementRef<HTMLVideoElement>;
 
   isCameraOn = false;
+  isScreenSharing = false;
   
   remotePeers = new Map<string, { username: string; stream: MediaStream | null; avatar?: string }>();
   remotePeerArray = signal<Array<{ peerId: string; username: string; stream: MediaStream | null; avatar?: string }>>([]);
+  remoteScreenShares = new Map<string, { username: string; stream: MediaStream | null }>();
+  remoteScreenShareArray = signal<Array<{ peerId: string; username: string; stream: MediaStream | null }>>([]);
   channelUsersData = signal<Map<string, { avatar?: string }>>(new Map());
 
   gradientCSS = 'linear-gradient(90deg, #6237A0, #9754CB)';
@@ -95,6 +99,26 @@ export class Chat implements OnInit, OnDestroy {
       })));
       this.cdr.detectChanges();
     });
+
+    this.videoService.onRemoteScreenShare((peerId, stream, username) => {
+      console.log('Adding remote screenshare from', peerId, username);
+      this.remoteScreenShares.set(peerId, { username, stream });
+      this.remoteScreenShareArray.set(Array.from(this.remoteScreenShares.entries()).map(([id, data]) => ({
+        peerId: id,
+        ...data
+      })));
+      this.cdr.detectChanges();
+    });
+
+    this.videoService.onRemoveScreenShare((peerId) => {
+      console.log('Removing remote screenshare from', peerId);
+      this.remoteScreenShares.delete(peerId);
+      this.remoteScreenShareArray.set(Array.from(this.remoteScreenShares.entries()).map(([id, data]) => ({
+        peerId: id,
+        ...data
+      })));
+      this.cdr.detectChanges();
+    });
   }
 
   async fetchAllUserAvatars() {
@@ -115,12 +139,15 @@ export class Chat implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    if (this.isCameraOn) {
-      const channel = this.currentChannel();
-      const user = this.currentUser;
-      if (channel && user) {
-        this.videoService.stopBroadcast(channel.channelId, user.username, channel.groupId);
-      }
+    const channel = this.currentChannel();
+    const user = this.currentUser;
+    
+    if (this.isCameraOn && channel && user) {
+      this.videoService.stopBroadcast(channel.channelId, user.username, channel.groupId);
+    }
+    
+    if (this.isScreenSharing && channel && user) {
+      this.videoService.stopScreenShare(channel.channelId, user.username, channel.groupId);
     }
   }
 
@@ -135,10 +162,16 @@ export class Chat implements OnInit, OnDestroy {
         this.toggleCamera();
       }
       
+      if (this.isScreenSharing) {
+        this.toggleScreenShare();
+      }
+      
       this.groupService.joinChannel(this.groupId, channelId, channelName, user.username);
       
       this.remotePeers.clear();
       this.remotePeerArray.set([]);
+      this.remoteScreenShares.clear();
+      this.remoteScreenShareArray.set([]);
     }
   }
 
@@ -254,6 +287,48 @@ export class Chat implements OnInit, OnDestroy {
 
       if (this.localVideo && this.localVideo.nativeElement) {
         this.localVideo.nativeElement.srcObject = null;
+      }
+    }
+  }
+
+  async toggleScreenShare() {
+    const channel = this.currentChannel();
+    const user = this.currentUser;
+
+    if (!channel || !user) {
+      console.error("No active channel or user found");
+      return;
+    }
+
+    if (!this.isScreenSharing) {
+      if (!this.videoService.isPeerReady()) {
+        alert('Video connection not ready yet. Please wait a moment and try again.');
+        return;
+      }
+
+      this.isScreenSharing = true;
+
+      const stream = await this.videoService.startScreenShare(
+        channel.channelId,
+        user.username,
+        channel.groupId
+      );
+
+      if (stream) {
+        this.localScreenShare.nativeElement.srcObject = stream;
+        await this.localScreenShare.nativeElement.play();
+      } else {
+        this.isScreenSharing = false;
+        alert('Failed to access screen');
+      }
+
+    } else {
+      this.isScreenSharing = false;
+
+      this.videoService.stopScreenShare(channel.channelId, user.username, channel.groupId);
+
+      if (this.localScreenShare && this.localScreenShare.nativeElement) {
+        this.localScreenShare.nativeElement.srcObject = null;
       }
     }
   }

@@ -16,6 +16,12 @@ export class VideoService {
   private peerUsernames = new Map<string, string>();
   private peerAvatars = new Map<string, string | undefined>();
 
+  private currentScreenStream: MediaStream | null = null;
+  private remoteScreenHandler?: (peerId: string, stream: MediaStream, username: string) => void;
+  private removeScreenHandler?: (peerId: string) => void;
+  private activeScreenPeers = new Set<string>();
+  private screenConnections: Map<string, MediaConnection> = new Map();
+
   constructor(private sockets: Sockets) {
     this.initPeer();
   }
@@ -33,7 +39,14 @@ export class VideoService {
     });
 
     this.peer.on('call', (call) => {
-      console.log('Incoming call from', call.peer);
+      console.log('Incoming call from', call.peer, 'metadata:', call.metadata);
+      
+      const isScreenShare = call.metadata?.type === 'screenshare';
+      
+      if (isScreenShare) {
+        this.handleScreenShareCall(call);
+        return;
+      }
       
       const existingConnection = this.connections.get(call.peer);
       
@@ -253,6 +266,86 @@ export class VideoService {
       this.connections.set(peerId, call);
     });
 
+    // Screenshare broadcast listener
+    this.sockets.on<any>('screenshare:broadcast', ({ peerId, username, channelId, groupId }) => {
+      if (!this.peer || !this.peerId || peerId === this.peerId) return;
+
+      this.peerUsernames.set(peerId, username);
+      this.activeScreenPeers.add(peerId);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const canvasStream = canvas.captureStream();
+      
+      const audioContext = new AudioContext();
+      const oscillator = audioContext.createOscillator();
+      const dst = audioContext.createMediaStreamDestination();
+      oscillator.connect(dst);
+      oscillator.start();
+      
+      const dummyStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...dst.stream.getAudioTracks()
+      ]);
+
+      const call = this.peer.call(peerId, dummyStream, { metadata: { type: 'screenshare-request' } });
+
+      if (!call) {
+        this.activeScreenPeers.delete(peerId);
+        dummyStream.getTracks().forEach(track => track.stop());
+        oscillator.stop();
+        audioContext.close().catch(() => {});
+        return;
+      }
+
+      let streamReceived = false;
+
+      call.on('stream', (remoteStream) => {
+        if (streamReceived) return;
+        streamReceived = true;
+        
+        if (this.remoteScreenHandler) {
+          this.remoteScreenHandler(peerId, remoteStream, username);
+        }
+        
+        dummyStream.getTracks().forEach(track => track.stop());
+        oscillator.stop();
+        audioContext.close().catch(() => {});
+      });
+
+      call.on('close', () => {
+        this.activeScreenPeers.delete(peerId);
+        this.screenConnections.delete(peerId);
+        if (this.removeScreenHandler) {
+          this.removeScreenHandler(peerId);
+        }
+      });
+
+      call.on('error', (err) => {
+        console.error('Screenshare call error:', err);
+        this.activeScreenPeers.delete(peerId);
+        this.screenConnections.delete(peerId);
+        dummyStream.getTracks().forEach(track => track.stop());
+        oscillator.stop();
+        audioContext.close().catch(() => {});
+      });
+
+      this.screenConnections.set(peerId, call);
+    });
+
+    this.sockets.on<any>('screenshare:stop', ({ peerId, username }) => {
+      const conn = this.screenConnections.get(peerId);
+      if (conn) conn.close();
+      
+      this.activeScreenPeers.delete(peerId);
+      this.screenConnections.delete(peerId);
+      
+      if (this.removeScreenHandler) {
+        this.removeScreenHandler(peerId);
+      }
+    });
+
     this.sockets.on<any>('video:stop', ({ peerId, username }) => {
       console.log(`${username} stopped broadcasting (${peerId})`);
       
@@ -270,6 +363,101 @@ export class VideoService {
         this.removeStreamHandler(peerId);
       }
     });
+  }
+
+  private handleVideoCall(call: MediaConnection) {
+    const existingConnection = this.connections.get(call.peer);
+    
+    if (existingConnection && existingConnection.open) {
+      console.log('Already have open connection with', call.peer);
+      
+      if (this.currentStream) {
+        call.answer(this.currentStream);
+      } else {
+        call.answer(new MediaStream());
+      }
+      return;
+    }
+    
+    this.activePeers.add(call.peer);
+
+    if (this.currentStream) {
+      call.answer(this.currentStream);
+    } else {
+      call.answer(new MediaStream());
+    }
+
+    let streamReceived = false;
+
+    call.on('stream', (remoteStream) => {
+      if (streamReceived) return;
+      streamReceived = true;
+
+      if (this.remoteHandler) {
+        const username = this.peerUsernames.get(call.peer) || 'Unknown';
+        const avatar = this.peerAvatars.get(call.peer);
+        this.remoteHandler(call.peer, remoteStream, username, avatar);
+      }
+    });
+
+    call.on('close', () => {
+      const currentConnection = this.connections.get(call.peer);
+      if (!currentConnection || currentConnection === call) {
+        this.activePeers.delete(call.peer);
+        this.connections.delete(call.peer);
+        if (this.removeStreamHandler) {
+          this.removeStreamHandler(call.peer);
+        }
+      }
+    });
+
+    call.on('error', (err) => {
+      console.error('Call error:', err);
+      this.activePeers.delete(call.peer);
+      this.connections.delete(call.peer);
+    });
+
+    this.connections.set(call.peer, call);
+  }
+
+  private handleScreenShareCall(call: MediaConnection) {
+    console.log('Incoming screenshare call from', call.peer);
+    
+    this.activeScreenPeers.add(call.peer);
+
+    if (this.currentScreenStream) {
+      call.answer(this.currentScreenStream);
+    } else {
+      call.answer(new MediaStream());
+    }
+
+    let streamReceived = false;
+
+    call.on('stream', (remoteStream) => {
+      if (streamReceived) return;
+      streamReceived = true;
+
+      if (this.remoteScreenHandler) {
+        const username = this.peerUsernames.get(call.peer) || 'Unknown';
+        this.remoteScreenHandler(call.peer, remoteStream, username);
+      }
+    });
+
+    call.on('close', () => {
+      this.activeScreenPeers.delete(call.peer);
+      this.screenConnections.delete(call.peer);
+      if (this.removeScreenHandler) {
+        this.removeScreenHandler(call.peer);
+      }
+    });
+
+    call.on('error', (err) => {
+      console.error('Screenshare call error:', err);
+      this.activeScreenPeers.delete(call.peer);
+      this.screenConnections.delete(call.peer);
+    });
+
+    this.screenConnections.set(call.peer, call);
   }
 
   async enableCamera(localVideo: HTMLVideoElement) {
@@ -304,11 +492,13 @@ export class VideoService {
   cleanup() {
     this.connections.forEach((conn) => conn.close());
     this.connections.clear();
+    this.screenConnections.forEach((conn) => conn.close());
+    this.screenConnections.clear();
     this.activePeers.clear();
-    this.peerUsernames.clear();
-    this.peerAvatars.clear();
-    this.currentStream?.getTracks().forEach((t) => t.stop());
+    this.activeScreenPeers.clear();
     this.currentStream = null;
+    this.currentScreenStream?.getTracks().forEach((t) => t.stop());
+    this.currentScreenStream = null;
     if (this.peer) {
       this.peer.destroy();
     }
@@ -365,5 +555,57 @@ export class VideoService {
 
   isPeerReady(): boolean {
     return this.peerId !== null;
+  }
+
+  onRemoteScreenShare(handler: (peerId: string, stream: MediaStream, username: string) => void) {
+    this.remoteScreenHandler = handler;
+  }
+
+  onRemoveScreenShare(handler: (peerId: string) => void) {
+    this.removeScreenHandler = handler;
+  }
+
+  async startScreenShare(channelId: string, username: string, groupId: string): Promise<MediaStream | null> {
+    if (!this.peer || !this.peerId) {
+      console.error("Cannot screenshare – peer not ready");
+      return null;
+    }
+
+    try {
+      this.currentScreenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false
+      });
+
+      this.sockets.emit('screenshare:broadcast', {
+        peerId: this.peerId,
+        username,
+        channelId,
+        groupId
+      });
+
+      this.currentScreenStream.getVideoTracks()[0].onended = () => {
+        this.stopScreenShare(channelId, username, groupId);
+      };
+
+      return this.currentScreenStream;
+    } catch (err) {
+      console.error('Failed to start screenshare:', err);
+      return null;
+    }
+  }
+
+  stopScreenShare(channelId: string, username: string, groupId: string) {
+    if (!this.peer || !this.peerId || !this.currentScreenStream) return;
+    
+    this.sockets.emit('screenshare:stop', {
+      peerId: this.peerId,
+      username,
+      channelId,
+      groupId
+    });
+
+    this.currentScreenStream.getTracks().forEach(track => track.stop());
+    this.currentScreenStream = null;
   }
 }

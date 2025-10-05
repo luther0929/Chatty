@@ -109,6 +109,43 @@
     
   </div>
 </div>
+
+          <!-- Screenshare Display Area -->
+          <div *ngIf="isScreenSharing || remoteScreenShareArray().length > 0" 
+               class="mb-3">
+            <h6 class="fw-bold text-secondary mb-2">Screen Shares</h6>
+            
+            <!-- Local screenshare -->
+            <div *ngIf="isScreenSharing" class="mb-2">
+              <div class="position-relative d-inline-block">
+                <video #localScreenShare
+                       autoplay
+                       muted
+                       playsinline
+                       style="max-width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #6237A0;">
+                </video>
+                <div class="position-absolute bottom-0 start-0 m-2 px-2 py-1 text-white fw-semibold"
+                     style="background: rgba(0,0,0,0.7); border-radius: 0.25rem; font-size: 0.85rem;">
+                  Your Screen
+                </div>
+              </div>
+            </div>
+            
+            <!-- Remote screenshares -->
+            <div *ngFor="let screen of remoteScreenShareArray()" class="mb-2">
+              <div class="position-relative d-inline-block">
+                <video [srcObject]="screen.stream"
+                       autoplay
+                       playsinline
+                       style="max-width: 100%; height: auto; border-radius: 0.5rem; border: 2px solid #9754CB;">
+                </video>
+                <div class="position-absolute bottom-0 start-0 m-2 px-2 py-1 text-white fw-semibold"
+                     style="background: rgba(0,0,0,0.7); border-radius: 0.25rem; font-size: 0.85rem;">
+                  {{ screen.username }}'s Screen
+                </div>
+              </div>
+            </div>
+          </div>
           
           <div class="row g-3">
             <!-- LEFT: Messages -->
@@ -161,6 +198,15 @@
                           style="height:38px; width:38px; border-radius:.5rem;">
                     <span *ngIf="isCameraOn">📹</span>
                     <span *ngIf="!isCameraOn">🚫</span>
+                  </button>
+
+                  <!-- Screenshare toggle button -->
+                  <button type="button"
+                          (click)="toggleScreenShare()"
+                          class="btn btn-outline-secondary mb-0 p-2 d-flex align-items-center justify-content-center"
+                          style="height:38px; width:38px; border-radius:.5rem;">
+                    <span *ngIf="isScreenSharing">🖥️</span>
+                    <span *ngIf="!isScreenSharing">📺</span>
                   </button>
 
                 <label

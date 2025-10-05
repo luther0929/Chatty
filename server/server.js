@@ -725,6 +725,20 @@ io.on('connection', (socket) => {
         
         socket.to(room).emit('video:stop', { peerId, username });
     });
+
+    socket.on('screenshare:broadcast', ({ groupId, channelId, username, peerId }) => {
+        const room = `${groupId}:${channelId}`;
+        console.log(`📺 ${username} started screensharing in ${room} with peer ${peerId}`);
+        
+        socket.to(room).emit('screenshare:broadcast', { peerId, username, channelId, groupId });
+    });
+
+    socket.on('screenshare:stop', ({ groupId, channelId, username, peerId }) => {
+        const room = `${groupId}:${channelId}`;
+        console.log(`🛑 ${username} stopped screensharing in ${room}`);
+        
+        socket.to(room).emit('screenshare:stop', { peerId, username });
+    });
     
 });
 
