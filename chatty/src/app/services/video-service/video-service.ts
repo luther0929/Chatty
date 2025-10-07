@@ -21,6 +21,7 @@ export class VideoService {
   private removeScreenHandler?: (peerId: string) => void;
   private activeScreenPeers = new Set<string>();
   private screenConnections: Map<string, MediaConnection> = new Map();
+  private screenshareBlockedHandler?: (username: string) => void;
 
   constructor(private sockets: Sockets) {
     this.initPeer();
@@ -41,7 +42,7 @@ export class VideoService {
     this.peer.on('call', (call) => {
       console.log('Incoming call from', call.peer, 'metadata:', call.metadata);
       
-      const isScreenShare = call.metadata?.type === 'screenshare';
+      const isScreenShare = call.metadata?.type === 'screenshare' || call.metadata?.type === 'screenshare-request';
       
       if (isScreenShare) {
         this.handleScreenShareCall(call);
@@ -270,6 +271,8 @@ export class VideoService {
     this.sockets.on<any>('screenshare:broadcast', ({ peerId, username, channelId, groupId }) => {
       if (!this.peer || !this.peerId || peerId === this.peerId) return;
 
+      console.log(`📺 Incoming screenshare broadcast from ${username} (${peerId})`);
+
       this.peerUsernames.set(peerId, username);
       this.activeScreenPeers.add(peerId);
 
@@ -289,9 +292,11 @@ export class VideoService {
         ...dst.stream.getAudioTracks()
       ]);
 
+      console.log(`Calling ${peerId} to receive screenshare...`);
       const call = this.peer.call(peerId, dummyStream, { metadata: { type: 'screenshare-request' } });
 
       if (!call) {
+        console.error('Failed to create screenshare call');
         this.activeScreenPeers.delete(peerId);
         dummyStream.getTracks().forEach(track => track.stop());
         oscillator.stop();
@@ -305,6 +310,9 @@ export class VideoService {
         if (streamReceived) return;
         streamReceived = true;
         
+        console.log(`📺 Received screenshare stream from ${username} (${peerId})`);
+        console.log('Screenshare stream tracks:', remoteStream.getTracks());
+        
         if (this.remoteScreenHandler) {
           this.remoteScreenHandler(peerId, remoteStream, username);
         }
@@ -315,6 +323,7 @@ export class VideoService {
       });
 
       call.on('close', () => {
+        console.log(`📺 Screenshare call closed with ${peerId}`);
         this.activeScreenPeers.delete(peerId);
         this.screenConnections.delete(peerId);
         if (this.removeScreenHandler) {
@@ -343,6 +352,13 @@ export class VideoService {
       
       if (this.removeScreenHandler) {
         this.removeScreenHandler(peerId);
+      }
+    });
+
+    this.sockets.on<any>('screenshare:blocked', ({ username }) => {
+      console.log(`Screenshare blocked - ${username} is already sharing`);
+      if (this.screenshareBlockedHandler) {
+        this.screenshareBlockedHandler(username);
       }
     });
 
@@ -420,45 +436,28 @@ export class VideoService {
     this.connections.set(call.peer, call);
   }
 
-  private handleScreenShareCall(call: MediaConnection) {
-    console.log('Incoming screenshare call from', call.peer);
-    
-    this.activeScreenPeers.add(call.peer);
-
-    if (this.currentScreenStream) {
-      call.answer(this.currentScreenStream);
-    } else {
-      call.answer(new MediaStream());
-    }
-
-    let streamReceived = false;
-
-    call.on('stream', (remoteStream) => {
-      if (streamReceived) return;
-      streamReceived = true;
-
-      if (this.remoteScreenHandler) {
-        const username = this.peerUsernames.get(call.peer) || 'Unknown';
-        this.remoteScreenHandler(call.peer, remoteStream, username);
-      }
-    });
-
-    call.on('close', () => {
-      this.activeScreenPeers.delete(call.peer);
-      this.screenConnections.delete(call.peer);
-      if (this.removeScreenHandler) {
-        this.removeScreenHandler(call.peer);
-      }
-    });
-
-    call.on('error', (err) => {
-      console.error('Screenshare call error:', err);
-      this.activeScreenPeers.delete(call.peer);
-      this.screenConnections.delete(call.peer);
-    });
-
-    this.screenConnections.set(call.peer, call);
+ private handleScreenShareCall(call: MediaConnection) {
+  console.log('📺 Incoming screenshare call from', call.peer);
+  
+  // Answer immediately with current stream
+  if (this.currentScreenStream) {
+    console.log('📺 Answering with current screenshare stream');
+    console.log('📺 Stream tracks:', this.currentScreenStream.getTracks());
+    call.answer(this.currentScreenStream);
+  } else {
+    console.log('📺 No screenshare stream yet, answering with empty stream');
+    call.answer(new MediaStream());
   }
+
+  // Don't expect a stream back - this is them requesting our stream, not sharing theirs
+  call.on('close', () => {
+    console.log('📺 Screenshare request call closed');
+  });
+
+  call.on('error', (err) => {
+    console.error('Screenshare request call error:', err);
+  });
+}
 
   async enableCamera(localVideo: HTMLVideoElement) {
     try {
@@ -565,6 +564,10 @@ export class VideoService {
     this.removeScreenHandler = handler;
   }
 
+  onScreenshareBlocked(handler: (username: string) => void) {
+    this.screenshareBlockedHandler = handler;
+  }
+
   async startScreenShare(channelId: string, username: string, groupId: string): Promise<MediaStream | null> {
     if (!this.peer || !this.peerId) {
       console.error("Cannot screenshare – peer not ready");
@@ -577,6 +580,15 @@ export class VideoService {
         audio: false
       });
 
+      console.log('📺 Screenshare stream obtained, tracks:', this.currentScreenStream.getTracks());
+
+      this.currentScreenStream.getVideoTracks()[0].onended = () => {
+        this.stopScreenShare(channelId, username, groupId);
+      };
+
+      // Small delay to ensure stream is ready before others call
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       this.sockets.emit('screenshare:broadcast', {
         peerId: this.peerId,
         username,
@@ -584,9 +596,7 @@ export class VideoService {
         groupId
       });
 
-      this.currentScreenStream.getVideoTracks()[0].onended = () => {
-        this.stopScreenShare(channelId, username, groupId);
-      };
+      console.log('📺 Broadcast emitted');
 
       return this.currentScreenStream;
     } catch (err) {

@@ -22,6 +22,9 @@ export class Chat implements OnInit, OnDestroy {
   private videoService = inject(VideoService);
   private sockets = inject(Sockets);
   private cdr = inject(ChangeDetectorRef);
+  someoneElseScreensharing = signal(false);
+  screenshareBlockedMessage = signal<string | null>(null);
+  private currentScreenStream: MediaStream | null = null;
 
   groupId: string | null = null;
   selectedImage: File | null = null;
@@ -107,6 +110,7 @@ export class Chat implements OnInit, OnDestroy {
         peerId: id,
         ...data
       })));
+      this.someoneElseScreensharing.set(true);
       this.cdr.detectChanges();
     });
 
@@ -117,7 +121,26 @@ export class Chat implements OnInit, OnDestroy {
         peerId: id,
         ...data
       })));
+      this.someoneElseScreensharing.set(this.remoteScreenShares.size > 0);
       this.cdr.detectChanges();
+    });
+
+    this.videoService.onScreenshareBlocked((username) => {
+      this.screenshareBlockedMessage.set(`${username} is currently screensharing`);
+      
+      // Stop the local stream if we tried to start one
+      if (this.isScreenSharing && this.currentScreenStream) {
+        this.currentScreenStream.getTracks().forEach(track => track.stop());
+        this.isScreenSharing = false;
+        if (this.localScreenShare && this.localScreenShare.nativeElement) {
+          this.localScreenShare.nativeElement.srcObject = null;
+        }
+      }
+      
+      // Clear the message after 3 seconds
+      setTimeout(() => {
+        this.screenshareBlockedMessage.set(null);
+      }, 3000);
     });
   }
 
@@ -247,6 +270,10 @@ export class Chat implements OnInit, OnDestroy {
     return 'http://localhost:3000/uploads/avatars/avatar-placeholder.png';
   }
 
+  get isScreenshareDisabled(): boolean {
+    return this.someoneElseScreensharing() && !this.isScreenSharing;
+  }
+
   async toggleCamera() {
     const channel = this.currentChannel();
     const user = this.currentUser;
@@ -301,12 +328,18 @@ export class Chat implements OnInit, OnDestroy {
     }
 
     if (!this.isScreenSharing) {
+      // Check if disabled
+      if (this.isScreenshareDisabled) {
+        const remote = Array.from(this.remoteScreenShares.values())[0];
+        this.screenshareBlockedMessage.set(`${remote?.username || 'Someone'} is currently screensharing`);
+        setTimeout(() => this.screenshareBlockedMessage.set(null), 3000);
+        return;
+      }
+      
       if (!this.videoService.isPeerReady()) {
         alert('Video connection not ready yet. Please wait a moment and try again.');
         return;
       }
-
-      this.isScreenSharing = true;
 
       const stream = await this.videoService.startScreenShare(
         channel.channelId,
@@ -315,17 +348,32 @@ export class Chat implements OnInit, OnDestroy {
       );
 
       if (stream) {
-        this.localScreenShare.nativeElement.srcObject = stream;
-        await this.localScreenShare.nativeElement.play();
+        this.currentScreenStream = stream;
+        this.isScreenSharing = true;
+        this.someoneElseScreensharing.set(false);
+        
+        // Use setTimeout to ensure the view has updated
+        setTimeout(() => {
+          if (this.localScreenShare && this.localScreenShare.nativeElement) {
+            this.localScreenShare.nativeElement.srcObject = stream;
+            this.localScreenShare.nativeElement.play().catch(err => {
+              console.error('Error playing screenshare:', err);
+            });
+          }
+        }, 0);
       } else {
         this.isScreenSharing = false;
-        alert('Failed to access screen');
       }
 
     } else {
       this.isScreenSharing = false;
 
       this.videoService.stopScreenShare(channel.channelId, user.username, channel.groupId);
+
+      if (this.currentScreenStream) {
+        this.currentScreenStream.getTracks().forEach(track => track.stop());
+        this.currentScreenStream = null;
+      }
 
       if (this.localScreenShare && this.localScreenShare.nativeElement) {
         this.localScreenShare.nativeElement.srcObject = null;

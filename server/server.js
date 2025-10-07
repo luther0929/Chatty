@@ -78,6 +78,7 @@ const peerServer = ExpressPeerServer(server, {
 app.use('/peerjs', peerServer);
 
 const activeVideoBroadcasts = new Map();
+const activeScreenShares = new Map();
 
 // REST API routes
 
@@ -230,6 +231,7 @@ io.on('connection', (socket) => {
         if (socket.currentChannel && socket.username) {
             const [groupId, channelId] = socket.currentChannel.split(':');
 
+            // Clean up video broadcasts
             const broadcasts = activeVideoBroadcasts.get(socket.currentChannel);
             if (broadcasts) {
                 const toRemove = Array.from(broadcasts).find(b => b.username === socket.username);
@@ -244,6 +246,16 @@ io.on('connection', (socket) => {
                 if (broadcasts.size === 0) {
                     activeVideoBroadcasts.delete(socket.currentChannel);
                 }
+            }
+            
+            // Clean up screenshare if this user was sharing
+            const currentScreenShare = activeScreenShares.get(socket.currentChannel);
+            if (currentScreenShare && currentScreenShare.username === socket.username) {
+                activeScreenShares.delete(socket.currentChannel);
+                io.to(socket.currentChannel).emit('screenshare:stop', {
+                    peerId: currentScreenShare.peerId,
+                    username: socket.username
+                });
             }
 
             await groupsCollection.updateOne(
@@ -530,6 +542,17 @@ io.on('connection', (socket) => {
             });
         });
 
+        // Notify about existing screenshare
+        const existingScreenShare = activeScreenShares.get(room);
+        if (existingScreenShare) {
+            socket.emit('screenshare:broadcast', {
+                peerId: existingScreenShare.peerId,
+                username: existingScreenShare.username,
+                channelId,
+                groupId
+            });
+        }
+
         const allGroups = await groupsCollection.find().toArray();
         io.emit('groups:update', allGroups);
 
@@ -728,16 +751,34 @@ io.on('connection', (socket) => {
 
     socket.on('screenshare:broadcast', ({ groupId, channelId, username, peerId }) => {
         const room = `${groupId}:${channelId}`;
+        
+        // Check if someone is already screensharing
+        if (activeScreenShares.has(room)) {
+            const current = activeScreenShares.get(room);
+            socket.emit('screenshare:blocked', { 
+                username: current.username 
+            });
+            return;
+        }
+        
         console.log(`📺 ${username} started screensharing in ${room} with peer ${peerId}`);
         
-        socket.to(room).emit('screenshare:broadcast', { peerId, username, channelId, groupId });
+        activeScreenShares.set(room, { peerId, username });
+        
+        io.to(room).emit('screenshare:broadcast', { peerId, username, channelId, groupId });
     });
 
+    
     socket.on('screenshare:stop', ({ groupId, channelId, username, peerId }) => {
         const room = `${groupId}:${channelId}`;
         console.log(`🛑 ${username} stopped screensharing in ${room}`);
         
-        socket.to(room).emit('screenshare:stop', { peerId, username });
+        const current = activeScreenShares.get(room);
+        if (current && current.peerId === peerId) {
+            activeScreenShares.delete(room);
+        }
+        
+        io.to(room).emit('screenshare:stop', { peerId, username });
     });
     
 });
