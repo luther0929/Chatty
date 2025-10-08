@@ -3,6 +3,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const crypto = require("crypto");
+const bcrypt = require('bcrypt'); //password encryption
+const SALT_ROUNDS = 10;
 const app = express();
 const PORT = 3000;
 
@@ -39,6 +41,29 @@ const messageStorage = multer.diskStorage({
   }
 });
 const uploadMessageImg = multer({ storage: messageStorage });
+
+function validatePassword(password) {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  
+  if (password.length < minLength) {
+    return { valid: false, message: 'Password must be at least 8 characters long' };
+  }
+  if (!hasUpperCase || !hasLowerCase) {
+    return { valid: false, message: 'Password must contain both uppercase and lowercase letters' };
+  }
+  if (!hasNumber) {
+    return { valid: false, message: 'Password must contain at least one number' };
+  }
+  if (!hasSpecialChar) {
+    return { valid: false, message: 'Password must contain at least one special character' };
+  }
+  
+  return { valid: true };
+}
 
 async function connectDB() {
   try {
@@ -133,22 +158,34 @@ app.post('/api/users/register', async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
+    // Validate password strength
+    const validation = validatePassword(password);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.message });
+    }
+
     const existing = await usersCollection.findOne({ username });
     if (existing) {
-      return res.status(400).json({ error: "Username already exists" });
+      return res.status(400).json({ error: "Username already exists. Please choose a different username." });
     }
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
     const newUser = {
       id: crypto.randomUUID(),
       username,
       email,
-      password,
+      password: hashedPassword,
       roles: ["chatUser"],
       groups: []
     };
 
     await usersCollection.insertOne(newUser);
-    res.status(201).json(newUser);
+    
+    // Don't send password back to client
+    const { password: _, ...userWithoutPassword } = newUser;
+    res.status(201).json(userWithoutPassword);
   } catch (err) {
     console.error("❌ register failed", err);
     res.status(500).json({ error: "Failed to register user" });
@@ -158,11 +195,22 @@ app.post('/api/users/register', async (req, res) => {
 app.post('/api/users/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = await usersCollection.findOne({ username, password });
+    const user = await usersCollection.findOne({ username });
+    
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-    res.json(user);
+
+    // Compare password with hashed password
+    const isMatch = await bcrypt.compare(password, user.password);
+    
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Don't send password back to client
+    const { password: _, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
   } catch (err) {
     console.error("❌ login failed", err);
     res.status(500).json({ error: "Failed to login" });
@@ -197,15 +245,16 @@ app.post('/api/messages/upload', uploadMessageImg.single('image'), (req, res) =>
 async function ensureSuperUser() {
   const superUser = await usersCollection.findOne({ username: "super" });
   if (!superUser) {
+    const hashedPassword = await bcrypt.hash("Super@123", SALT_ROUNDS);
     await usersCollection.insertOne({
       id: crypto.randomUUID(),
       username: "super",
       email: "super@example.com",
-      password: "123",
+      password: hashedPassword,
       roles: ["superAdmin"],
       groups: []
     });
-    console.log("✅ Default super user created: username=super, password=123");
+    console.log("✅ Default super user created: username=super, password=Super@123");
   } else {
     console.log("ℹ️ Super user already exists");
   }

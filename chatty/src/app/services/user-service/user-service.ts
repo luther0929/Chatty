@@ -30,18 +30,19 @@ export class UserService {
   }
 
 
-  async login(username: string, password: string): Promise<boolean> {
+  async login(username: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
       const user = await this.http.post<User>(`${this.apiUrl}/login`, { username, password }).toPromise();
       if (user) {
         this.currentUser = user;
         sessionStorage.setItem('currentUser', JSON.stringify(user));
-        return true;
+        return { success: true };
       }
-      return false;
-    } catch (err) {
+      return { success: false, error: 'Invalid credentials' };
+    } catch (err: any) {
       console.error("Login failed", err);
-      return false;
+      const errorMsg = err?.error?.error || 'Login failed. Please try again.';
+      return { success: false, error: errorMsg };
     }
   }
 
@@ -65,18 +66,19 @@ export class UserService {
     return await lastValueFrom(this.http.get<User[]>(this.apiUrl));
   }
 
-  async register(username: string, password: string, email?: string): Promise<boolean> {
+  async register(username: string, password: string, email?: string): Promise<{ success: boolean; error?: string }> {
     try {
       const user = await this.http.post<User>(`${this.apiUrl}/register`, { username, email, password }).toPromise();
       if (user) {
         this.currentUser = user;
         sessionStorage.setItem('currentUser', JSON.stringify(user));
-        return true;
+        return { success: true };
       }
-      return false;
-    } catch (err) {
+      return { success: false, error: 'Registration failed' };
+    } catch (err: any) {
       console.error("Register failed", err);
-      return false;
+      const errorMsg = err?.error?.error || 'Registration failed. Please try again.';
+      return { success: false, error: errorMsg };
     }
   }
 

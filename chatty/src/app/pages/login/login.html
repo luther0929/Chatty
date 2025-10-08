@@ -1,5 +1,5 @@
 <div class="d-flex justify-content-center align-items-center vh-100" 
-     style="background: linear-gradient(135deg, #28104E, #6237A0, #9754CB, #DEACFS);">
+     style="background: linear-gradient(135deg, #28104E, #6237A0, #9754CB, #DEACF5);">
   
   <div class="card shadow-lg border-0" style="width: 420px; border-radius: 1rem;">
     
@@ -43,13 +43,65 @@
               id="password"
               type="password"
               class="form-control"
+              [class.is-invalid]="errorMessage && !isSignUpMode"
               [(ngModel)]="password"
               name="password"
               placeholder="Enter password"
+              (input)="onPasswordInput()"
               required
             />
           </div>
+          
+          <!-- Password Requirements (Sign Up Only) -->
+          @if (isSignUpMode && showRequirements) {
+            <div class="mt-2 p-2 bg-light rounded" style="font-size: 0.85rem;">
+              <small class="d-block fw-semibold mb-1 text-muted">Password must contain:</small>
+              <div class="d-flex align-items-center mb-1">
+                <i class="bi" [class.bi-check-circle-fill]="passwordRequirements.minLength" 
+                   [class.bi-x-circle-fill]="!passwordRequirements.minLength"
+                   [class.text-success]="passwordRequirements.minLength"
+                   [class.text-danger]="!passwordRequirements.minLength"></i>
+                <span class="ms-2" [class.text-success]="passwordRequirements.minLength">At least 8 characters</span>
+              </div>
+              <div class="d-flex align-items-center mb-1">
+                <i class="bi" [class.bi-check-circle-fill]="passwordRequirements.hasUpperCase" 
+                   [class.bi-x-circle-fill]="!passwordRequirements.hasUpperCase"
+                   [class.text-success]="passwordRequirements.hasUpperCase"
+                   [class.text-danger]="!passwordRequirements.hasUpperCase"></i>
+                <span class="ms-2" [class.text-success]="passwordRequirements.hasUpperCase">One uppercase letter (A-Z)</span>
+              </div>
+              <div class="d-flex align-items-center mb-1">
+                <i class="bi" [class.bi-check-circle-fill]="passwordRequirements.hasLowerCase" 
+                   [class.bi-x-circle-fill]="!passwordRequirements.hasLowerCase"
+                   [class.text-success]="passwordRequirements.hasLowerCase"
+                   [class.text-danger]="!passwordRequirements.hasLowerCase"></i>
+                <span class="ms-2" [class.text-success]="passwordRequirements.hasLowerCase">One lowercase letter (a-z)</span>
+              </div>
+              <div class="d-flex align-items-center mb-1">
+                <i class="bi" [class.bi-check-circle-fill]="passwordRequirements.hasNumber" 
+                   [class.bi-x-circle-fill]="!passwordRequirements.hasNumber"
+                   [class.text-success]="passwordRequirements.hasNumber"
+                   [class.text-danger]="!passwordRequirements.hasNumber"></i>
+                <span class="ms-2" [class.text-success]="passwordRequirements.hasNumber">One number (0-9)</span>
+              </div>
+              <div class="d-flex align-items-center">
+                <i class="bi" [class.bi-check-circle-fill]="passwordRequirements.hasSpecialChar" 
+                   [class.bi-x-circle-fill]="!passwordRequirements.hasSpecialChar"
+                   [class.text-success]="passwordRequirements.hasSpecialChar"
+                   [class.text-danger]="!passwordRequirements.hasSpecialChar"></i>
+                <span class="ms-2" [class.text-success]="passwordRequirements.hasSpecialChar">One special character (!@#$%...)</span>
+              </div>
+            </div>
+          }
         </div>
+
+        <!-- Error Message -->
+        @if (errorMessage) {
+          <div class="alert alert-danger py-2 mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            {{ errorMessage }}
+          </div>
+        }
 
         <!-- Submit -->
         <button type="submit" 
@@ -69,7 +121,7 @@
         <button class="btn w-100" 
                 style="border: 1px solid #9754CB; color: #6237A0; border-radius: 0.5rem;"
                 (click)="toggleMode()">
-          {{ isSignUpMode ? 'Already have an account? Log in' : 'Don’t have an account? Sign up now!' }}
+          {{ isSignUpMode ? 'Already have an account? Log in' : "Don't have an account? Sign up now!" }}
         </button>
       </div>
     </div>
