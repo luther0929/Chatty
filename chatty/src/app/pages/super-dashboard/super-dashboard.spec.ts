@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { SuperDashboard } from './super-dashboard';
 
 describe('SuperDashboard', () => {
@@ -8,7 +8,7 @@ describe('SuperDashboard', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SuperDashboard]
+      imports: [SuperDashboard, HttpClientTestingModule]
     })
     .compileComponents();
 

@@ -837,3 +837,10 @@ server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`✅ PeerJS available at http://localhost:${PORT}/peerjs`);
 });
+
+// Export functions for testing
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { 
+    validatePassword 
+  };
+}
